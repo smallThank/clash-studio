@@ -4,6 +4,8 @@ mixed-port: 7890
 dns:
   enable: true
   nameserver: [1.1.1.1]
+profile:
+  emoji-fixture: "🚀 🎯 🐱"
 proxies:
   - {name: 测试中继, type: socks5, server: 192.0.2.25, port: 1080}
 proxy-groups:
@@ -46,6 +48,7 @@ rules:
   await shown(page.getByRole('heading', { name: profile }));
   await shown(page.getByRole('heading', { name: '代理组' }));
   await shown(preview());
+  await shown(preview().getByText(/🚀 🎯 🐱/u));
   const theme = button('深色皮肤');
   await theme.click();
   verify(await theme.getAttribute('aria-pressed') === 'true', '深色皮肤切换失败');
@@ -127,7 +130,7 @@ rules:
   await modal().waitFor({ state: 'hidden' });
 
   await section('扩展配置');
-  await field('扩展 YAML').fill('sniffer:\n  enable: false\nprofile:\n  store-selected: true');
+  await field('扩展 YAML').fill('sniffer:\n  enable: false\nprofile:\n  store-selected: true\n  emoji-fixture: "🚀 🎯 🐱"');
   await button('保存草稿').click();
   await shown(preview().getByText('store-selected: true', { exact: true }));
 
@@ -158,6 +161,9 @@ rules:
     verify(firstYAML.includes('dialer-proxy: 重命名中继') && firstYAML.includes('RULE-SET,测试规则集,节点选择'), '已发布配置缺少引用或规则');
 
     await close();
+    await button('已发布', page.locator('.preview')).click();
+    await shown(preview().getByText(/🚀 🎯 🐱/u));
+    await button('当前草稿', page.locator('.preview')).click();
     await section('常规设置');
     await field('混合端口').fill('7898');
     await button('保存草稿').click();

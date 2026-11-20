@@ -90,6 +90,7 @@ body { min-inline-size: 0; }
 .check-text { text-align: start; }
 .preview .code-window { block-size: clamp(10rem, 50dvh, 30rem); min-block-size: 0; }
 .code-line { font-size: .8125rem; line-height: 1.7; }
+.code-line code { font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", monospace; }
 .line-no { width: 3.25em; padding-inline-end: .75em; }
 
 dialog[open] {

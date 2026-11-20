@@ -13,6 +13,7 @@ import Icon from './components/Icon.vue';
 import ImportForm from './components/ImportForm.vue';
 import ModalDialog from './components/ModalDialog.vue';
 import YamlPane from './components/YamlPane.vue';
+import { yamlPreviewText } from './yaml-preview.ts';
 import ThemeToggle from './components/ThemeToggle.vue';
 
 const account = shallowRef<Account | null>(null);
@@ -32,7 +33,7 @@ const section = ref<ModuleKey>('proxy-groups');
 const mobileView = ref<'editor' | 'preview'>('editor');
 const previewMode = ref<'draft' | 'published'>('draft');
 const publishedYAML = ref('');
-const yaml = computed(() => previewMode.value === 'published' ? publishedYAML.value : draft.value?.yaml ?? '');
+const yaml = computed(() => yamlPreviewText(previewMode.value === 'published' ? publishedYAML.value : draft.value?.yaml ?? ''));
 const issues = shallowRef<Issue[]>([]);
 const checking = ref(false);
 const checked = ref(false);
