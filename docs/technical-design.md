@@ -1,6 +1,6 @@
 # Clash 配置台技术设计
 
-状态：原型待确认　｜　技术栈：Vite、Go、SQLite
+状态：首期实现，待双客户端实机验收　｜　技术栈：Vite、Go、SQLite
 
 ## 1. 系统结构
 
@@ -15,11 +15,11 @@ flowchart LR
     C -->|"按配置拉取节点和规则"| R["Provider 资源"]
 ```
 
-- 前端建议采用 Vite、Vue 3、TypeScript。UI 按配置列表、模块编辑、校验预览、账号、发布链接组织。用户可用键盘移动规则，较长列表使用筛选和分页。表单与 YAML 预览共享字段路径用于错误定位。
-- 后端建议采用 Go `net/http`、`database/sql`、SQLite Go 驱动和 `go.yaml.in/yaml/v3`。按账号、配置、YAML 编译、上游导入、发布订阅划分包。接口使用 JSON，导出和订阅直接返回 YAML。
+- 前端采用 Vite、Vue 3、TypeScript，沿用原型的侧栏、工作区、YAML 预览和移动端标签。较长列表使用筛选和分页。表单与 YAML 预览共享字段路径用于错误定位。
+- 后端使用 Go `net/http`、`database/sql`、`github.com/mattn/go-sqlite3` 和 `gopkg.in/yaml.v3`。配置编译、校验和上游获取位于 `internal/config`，账户、API 和 SQLite 位于 `internal/studio`。接口使用 JSON，导出和订阅直接返回 YAML。
 - 初期单实例部署，SQLite 使用本地持久卷，启用迁移、外键、WAL 和 `busy_timeout`。请求读写使用短事务，可通过 SQLite 在线备份机制备份。上游读取在事务外完成。
 - 反向代理终止 TLS，配置公开基址 `PUBLIC_BASE_URL` 生成订阅链接。确认路由器和桌面在代理尚未启动时也能解析并访问该域名。私有部署可使用两端均可访问的内网地址和受信任证书。
-- 当前原型以 Vite、JavaScript 和浏览器本地存储实现评审流程。生产框架和 API 方案待确认后落地。
+- `frontend/` 是连接 Go 服务的正式前端，`prototype/` 保留原型。项目启动与测试命令见 [README](../README.md)。
 
 ## 2. 配置建模与 YAML 编译
 
@@ -60,10 +60,11 @@ flowchart LR
 | --- | --- |
 | `users` | `id`，`username`，`username_normalized UNIQUE`，`password_hash`，`created_at`。 |
 | `sessions` | `session_digest PK`，`user_id FK`，`expires_at`，`created_at`。登出删除会话，按过期索引定期清理。 |
-| `profiles` | `id`，`owner_id FK`，`name`，`target_client`，`target_core_version` 可空，`draft_yaml_blob`，`draft_rev`，`published_version_id` 可空，`updated_at`。按 `owner_id, updated_at` 建索引，发布指针只可引用当前配置的版本。 |
-| `profile_imports` | `profile_id FK`，`source_url_blob`，`user_agent`，`base_yaml_blob`，`last_fetched_at`，`last_status`，`content_sha256`。记录完整配置上游导入基线。 |
-| `profile_versions` | `id`，`profile_id FK`，`version_number`，`source_draft_rev`，`yaml_blob`，`content_sha256`，`created_at`；`UNIQUE(profile_id, version_number)` 和 `UNIQUE(profile_id, source_draft_rev)`。 |
-| `subscription_links` | `id`，`profile_id FK`，`label`，`token_digest UNIQUE`，`token_blob`，`created_at`，`revoked_at` 可空。多个设备可分别持有链接。 |
+| `profiles` | `id`，`owner_id FK`，`name`，`target`，`draft_yaml`，`draft_rev`，`published_version_id` 可空，`updated_at`。按 `owner_id, updated_at` 建索引，发布指针只可引用当前配置的版本。 |
+| `profile_imports` | `profile_id FK`，`source_url`，`user_agent`，`base_yaml`，`last_fetched_at`，`content_sha256`。记录完整配置上游导入基线。 |
+| `profile_versions` | `id`，`profile_id FK`，`version`，`draft_rev`，`yaml`，`content_sha256`，`created_at`，以及 `UNIQUE(profile_id, version)` 和 `UNIQUE(profile_id, draft_rev)`。 |
+| `subscription_links` | `id`，`profile_id FK`，`label`，`token_digest UNIQUE`，`token`，`created_at`，`revoked_at` 可空。多个设备可分别持有链接。 |
+| `import_stages` | `id`，`owner_id FK`，可选 `profile_id FK`，导入内容、基线摘要、草稿修订号及过期时间。临时保存待确认的导入或更新。 |
 
 按账户和配置 ID 做每一次变更与读取的授权。草稿使用乐观锁 `UPDATE … WHERE id=? AND owner_id=? AND draft_rev=?`，不匹配返回冲突。重试已发布的草稿修订时返回已有版本，保留当前发布指针。首次尝试发布已经被编辑更新的草稿修订时返回版本冲突。删除配置在一个事务内移除导入基线、版本和链接，先清空发布指针以满足外键约束。
 
