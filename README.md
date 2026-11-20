@@ -90,6 +90,8 @@ go run ./cmd/clash-studio
 
 在 OpenClash 的「配置订阅」或 Clash Verge Rev 的远程订阅中粘贴发布链接。生成链接所指的网站需要能被客户端访问。客户端配置中的 HTTP 代理 Provider 和规则 Provider 仍由客户端访问各自的原地址。持有发布链接即可读取其中的代理配置，可在页面中逐条吊销。
 
+检查或导入上游订阅时，如果容器 DNS 返回 OpenClash 常用的 Fake-IP 网段（`198.18.0.0/15`），应用会通过 Cloudflare 的加密 DNS 查询订阅域名，再连接通过公网地址检查的结果。DNS 查询只包含域名。若容器无法访问 `https://1.1.1.1/dns-query`，可在 OpenClash 的 Fake-IP 过滤列表加入订阅域名，让容器直接解析到公网地址。
+
 ## 测试
 
 ```sh

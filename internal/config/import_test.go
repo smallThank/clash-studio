@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -54,11 +55,11 @@ func TestRemoteImportGuards(t *testing.T) {
 	}
 	ctx := context.Background()
 	resolver := fakeResolver([]netip.Addr{netip.MustParseAddr("2606:4700::1111"), netip.MustParseAddr("10.0.0.1")})
-	if _, err := publicAddresses(ctx, resolver, "example.invalid"); !errors.Is(err, errNonPublic) {
+	if _, err := publicAddresses(ctx, resolver, nil, "example.invalid"); !errors.Is(err, errNonPublic) {
 		t.Fatalf("mixed DNS response should be blocked before dialing: %v", err)
 	}
 	resolver = fakeResolver([]netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("2606:4700::1111")})
-	addrs, err := publicAddresses(ctx, resolver, "example.invalid")
+	addrs, err := publicAddresses(ctx, resolver, nil, "example.invalid")
 	if err != nil || len(addrs) != 2 {
 		t.Fatalf("expected validated public DNS results, got %d, %v", len(addrs), err)
 	}
@@ -74,6 +75,46 @@ func TestRemoteImportGuards(t *testing.T) {
 	}
 	if err := checkRedirect(redirect, make([]*http.Request, 5)); !errors.Is(err, errRedirect) {
 		t.Fatalf("redirect budget was not enforced: %v", err)
+	}
+}
+
+func TestFakeIPUsesValidatedPublicDNSFallback(t *testing.T) {
+	fake := netip.MustParseAddr("198.18.4.2")
+	otherFake := netip.MustParseAddr("::ffff:198.19.0.3")
+	ipv4 := netip.MustParseAddr("8.8.4.4")
+	ipv6 := netip.MustParseAddr("2606:4700::1111")
+	private := netip.MustParseAddr("192.168.1.1")
+	for _, test := range []struct {
+		name            string
+		local, fallback []netip.Addr
+		fallbackError   error
+		calls           int
+		want            []netip.Addr
+		wantError       error
+	}{
+		{name: "public local DNS", local: []netip.Addr{ipv4}, want: []netip.Addr{ipv4}},
+		{name: "fake IP", local: []netip.Addr{fake}, fallback: []netip.Addr{ipv4, ipv6}, calls: 1, want: []netip.Addr{ipv4, ipv6}},
+		{name: "mixed fake and public", local: []netip.Addr{otherFake, ipv6}, fallback: []netip.Addr{ipv4}, calls: 1, want: []netip.Addr{ipv4}},
+		{name: "local private beside fake IP", local: []netip.Addr{fake, private}, wantError: errNonPublic},
+		{name: "fallback private beside public", local: []netip.Addr{fake}, fallback: []netip.Addr{ipv4, private}, calls: 1, wantError: errNonPublic},
+		{name: "fallback still fake", local: []netip.Addr{fake}, fallback: []netip.Addr{otherFake}, calls: 1, wantError: errNonPublic},
+		{name: "fallback unavailable", local: []netip.Addr{fake}, fallbackError: errors.New("network error"), calls: 1, wantError: errFakeIPResolution},
+		{name: "fallback empty", local: []netip.Addr{fake}, calls: 1, wantError: errFakeIPResolution},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			fallback := resolverFunc(func(_ context.Context, network, host string) ([]netip.Addr, error) {
+				calls++
+				if network != "ip" || host != "subscription.example" {
+					t.Errorf("unexpected fallback query %s %s", network, host)
+				}
+				return test.fallback, test.fallbackError
+			})
+			got, err := publicAddresses(context.Background(), fakeResolver(test.local), fallback, "subscription.example")
+			if !errors.Is(err, test.wantError) || !slices.Equal(got, test.want) || calls != test.calls {
+				t.Fatalf("got addresses %v, error %v and %d fallback calls", got, err, calls)
+			}
+		})
 	}
 }
 
@@ -93,6 +134,7 @@ func TestFetchYAMLResponseLimitsAndCredentialRedaction(t *testing.T) {
 		{name: "size", code: 200, body: strings.Repeat("Y", MaxYAMLBytes+1), want: "超过"},
 		{name: "http status", code: 404, body: "token-placeholder", want: "404"},
 		{name: "transport", transportError: errors.New("token-placeholder"), want: "无法连接"},
+		{name: "fake IP error", transportError: errors.Join(errFakeIPResolution, errors.New("token-placeholder")), want: "检测到 Fake-IP"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -118,6 +160,12 @@ type fakeResolver []netip.Addr
 
 func (f fakeResolver) LookupNetIP(context.Context, string, string) ([]netip.Addr, error) {
 	return f, nil
+}
+
+type resolverFunc func(context.Context, string, string) ([]netip.Addr, error)
+
+func (f resolverFunc) LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error) {
+	return f(ctx, network, host)
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

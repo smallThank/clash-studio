@@ -58,6 +58,9 @@ func fetchYAML(client *http.Client, request *http.Request) (string, error) {
 		if errors.Is(err, errRedirect) {
 			return "", errRedirect
 		}
+		if errors.Is(err, errFakeIPResolution) {
+			return "", errFakeIPResolution
+		}
 		// http.Client errors may embed the entire upstream URL, including subscription tokens.
 		return "", errors.New("无法连接订阅地址或上游响应超时")
 	}
@@ -80,6 +83,7 @@ func fetchYAML(client *http.Client, request *http.Request) (string, error) {
 
 var errNonPublic = errors.New("上游订阅地址必须指向公网服务器")
 var errRedirect = errors.New("上游订阅重定向无效或超过限制")
+var errFakeIPResolution = errors.New("检测到 Fake-IP，重新解析订阅域名失败。请将订阅域名加入 OpenClash 的 Fake-IP 过滤列表，或检查容器能否访问公网 DNS")
 
 func importURL(raw string) (*url.URL, error) {
 	if len(raw) > 8192 {
@@ -120,11 +124,12 @@ func checkRedirect(request *http.Request, via []*http.Request) error {
 
 var blockedRanges = parsePrefixes(
 	"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24",
-	"192.88.99.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4",
+	"192.88.99.0/24", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4",
 	"2001::/23", "2001:db8::/32", "2002::/16", "3fff::/20",
 )
 
 var globalIPv6 = netip.MustParsePrefix("2000::/3")
+var fakeIPRange = netip.MustParsePrefix("198.18.0.0/15")
 
 func parsePrefixes(values ...string) []netip.Prefix {
 	prefixes := make([]netip.Prefix, len(values))
@@ -139,7 +144,7 @@ func publicAddress(addr netip.Addr) bool {
 		return false
 	}
 	addr = addr.Unmap()
-	if !addr.IsGlobalUnicast() || addr.IsPrivate() || (addr.Is6() && !globalIPv6.Contains(addr)) {
+	if !addr.IsGlobalUnicast() || addr.IsPrivate() || fakeIPRange.Contains(addr) || (addr.Is6() && !globalIPv6.Contains(addr)) {
 		return false
 	}
 	for _, prefix := range blockedRanges {
@@ -154,16 +159,32 @@ type ipResolver interface {
 	LookupNetIP(context.Context, string, string) ([]netip.Addr, error)
 }
 
-func publicAddresses(ctx context.Context, resolver ipResolver, host string) ([]netip.Addr, error) {
-	resolved := []netip.Addr{}
+func publicAddresses(ctx context.Context, resolver, fallback ipResolver, host string) ([]netip.Addr, error) {
 	if addr, err := netip.ParseAddr(host); err == nil {
-		resolved = append(resolved, addr)
-	} else {
-		addresses, err := resolver.LookupNetIP(ctx, "ip", host)
-		if err != nil || len(addresses) == 0 {
-			return nil, errors.New("无法解析订阅服务器")
+		if !publicAddress(addr) {
+			return nil, errNonPublic
 		}
-		resolved = addresses
+		return []netip.Addr{addr}, nil
+	}
+	resolved, err := resolver.LookupNetIP(ctx, "ip", host)
+	if err != nil || len(resolved) == 0 {
+		return nil, errors.New("无法解析订阅服务器")
+	}
+	hasFakeIP := false
+	for _, addr := range resolved {
+		if addr.Zone() == "" && fakeIPRange.Contains(addr.Unmap()) {
+			hasFakeIP = true
+		} else if !publicAddress(addr) {
+			return nil, errNonPublic
+		}
+	}
+	if !hasFakeIP {
+		return resolved, nil
+	}
+
+	resolved, err = fallback.LookupNetIP(ctx, "ip", host)
+	if err != nil || len(resolved) == 0 {
+		return nil, errFakeIPResolution
 	}
 	for _, addr := range resolved {
 		if !publicAddress(addr) {
@@ -178,7 +199,7 @@ func publicDial(ctx context.Context, network, address string) (net.Conn, error) 
 	if err != nil {
 		return nil, errors.New("订阅连接地址无效")
 	}
-	addresses, err := publicAddresses(ctx, net.DefaultResolver, host)
+	addresses, err := publicAddresses(ctx, net.DefaultResolver, publicDNS, host)
 	if err != nil {
 		return nil, err
 	}
