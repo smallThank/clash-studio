@@ -21,6 +21,47 @@ docker run -d --name clash-studio --restart unless-stopped \
 - **数据保留**。命名卷 `clash-studio-data` 保存 SQLite 和自动生成的 `master.key`。更新镜像后重建容器时挂载同一卷。停容器备份时保留卷内数据库和密钥。若使用 `CLASH_MASTER_KEY` 注入密钥，另行保管同一个值。若改用宿主机目录挂载，请让该目录可由 UID/GID `10001:10001` 写入。
 - **镜像架构**。直接在部署服务器构建可获得对应架构的镜像。从 Apple Silicon 将镜像搬到 x86-64 服务器时，构建命令使用 `docker buildx build --platform linux/amd64 --load -t clash-studio:local .`，再用 `docker save` 和 `docker load` 转移。
 
+### 修复 `/data` 权限
+
+日志出现 `open /data/.master-key-…: permission denied` 时，检查原容器的挂载。将下面的容器名换成实际名称或 ID。
+
+```sh
+container=clash-studio
+docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}type={{.Type}} source={{.Source}} name={{.Name}} rw={{.RW}}{{end}}{{end}}' "$container"
+```
+
+若为 `type=bind` 且 `rw=true`，在宿主机以管理员身份修改 `source` 对应目录。下面的命令只修改数据目录和应用已存在的数据文件。
+
+```sh
+data_dir=/替换为上面显示的source
+docker stop "$container" &&
+  chown 10001:10001 "$data_dir" &&
+  chmod u+rwx "$data_dir" &&
+  find "$data_dir" -maxdepth 1 -type f \( -name master.key -o -name studio.sqlite -o -name studio.sqlite-wal -o -name studio.sqlite-shm \) -exec chown 10001:10001 {} + &&
+  docker start "$container"
+```
+
+若为 `type=volume` 且 `rw=true`，用同一镜像临时修复卷内权限，再启动原容器。
+
+```sh
+volume=替换为上面显示的name
+image=$(docker inspect -f '{{.Image}}' "$container")
+docker stop "$container" &&
+  docker run --rm --user 0:0 --entrypoint sh \
+    --mount "type=volume,source=$volume,target=/data" "$image" -ec '
+      chown 10001:10001 /data
+      chmod u+rwx /data
+      for file in /data/master.key /data/studio.sqlite /data/studio.sqlite-wal /data/studio.sqlite-shm; do
+        if [ -f "$file" ]; then chown 10001:10001 "$file"; fi
+      done
+    ' &&
+  docker start "$container"
+```
+
+如果显示 `rw=false`，使用原数据目录或原命名卷以可写方式重建容器。宿主机启用 SELinux 且目录权限修复后仍被拒绝时，专用于此容器的宿主机目录可用 `-v /实际数据目录:/data:Z` 重新挂载。重建时保留现有 SQLite 数据库和 `master.key`。
+
+启动后运行 `docker exec "$container" curl -fsS http://127.0.0.1:8080/healthz`，看到 `ok` 表示服务已恢复。
+
 ## 本地运行
 
 需要 Go 1.23+、支持 CGO 的 C 编译器，以及 Node.js 22.15+。
