@@ -23,6 +23,8 @@ docker run -d --name clash-studio --restart unless-stopped \
 
 ### 修复 `/data` 权限
 
+镜像通过 `USER 10001:10001` 以固定的非 root 身份运行，前一个数字是 UID，后一个是 GID。绑定挂载会沿用宿主机目录的权限，应用需要以这个身份在 `/data` 写入 SQLite 数据库和主密钥。 [Dockerfile](Dockerfile)
+
 日志出现 `open /data/.master-key-…: permission denied` 时，检查原容器的挂载。将下面的容器名换成实际名称或 ID。
 
 ```sh
