@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -139,5 +140,59 @@ func TestSubscriptionKeyMigrationKeepsPublishedDataAndLinkMetadata(t *testing.T)
 	var revoked int64
 	if err := db.QueryRow("SELECT revoked_at FROM subscription_links WHERE id = 'revoked'").Scan(&revoked); err != nil || revoked != 4 {
 		t.Fatalf("migration lost the revocation: %d, %v", revoked, err)
+	}
+}
+
+func TestSubscriptionURLWithAutomaticPublicAddress(t *testing.T) {
+	_, db := testOpen(t, filepath.Join(t.TempDir(), "automatic.db"), Options{})
+	masterKey := bytes.Repeat([]byte{9}, 32)
+	handler, err := New(db, Options{MasterKey: masterKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	misdirected := testClient{origin: "https://other.example.com:8443"}
+	proxyHeaders := map[string]string{"Sec-Fetch-Site": "same-origin", "X-Forwarded-Host": "other.example.com", "X-Forwarded-Proto": "https"}
+	expect(t, misdirected.request(handler, http.MethodPost, "http://clash.example.com:8443"+apiPrefix+"/auth/register",
+		credentials{"Misdirected", testPassword}, proxyHeaders), http.StatusForbidden)
+
+	client := testClient{origin: "https://clash.example.com:8443"}
+	base := "http://clash.example.com:8443" + apiPrefix
+	rec := client.request(handler, http.MethodPost, base+"/auth/register", credentials{"Owner", testPassword}, proxyHeaders)
+	expect(t, rec, http.StatusCreated)
+	client.csrf = decode[sessionUser](t, rec).CSRFToken
+	client.auth = rec.Result().Cookies()[0]
+	if !client.auth.Secure {
+		t.Fatal("HTTPS access must create a Secure cookie")
+	}
+	rec = client.request(handler, http.MethodPost, base+"/profiles",
+		createProfileRequest{profileMetadata: profileMetadata{Name: "测试", Target: "both"}}, proxyHeaders)
+	expect(t, rec, http.StatusCreated)
+	id := decode[Profile](t, rec).ID
+	path := base + "/profiles/" + id
+	expect(t, client.request(handler, http.MethodPost, path+"/publish", revisionRequest{ExpectedDraftRev: 1}, proxyHeaders), http.StatusOK)
+	rec = client.request(handler, http.MethodGet, path+"/links", nil, nil)
+	expect(t, rec, http.StatusOK)
+	link := decode[map[string][]Link](t, rec)["links"][0]
+	suffix := "/s/" + link.ID + ".yaml"
+	rec = client.request(handler, http.MethodGet, path+"/links/"+link.ID+"/url?relative=1", nil, proxyHeaders)
+	expect(t, rec, http.StatusOK)
+	result := decode[map[string]string](t, rec)
+	if key, ok := strings.CutPrefix(result["url"], suffix+"?key="); result["endpoint"] != suffix || !ok || !validToken(key) {
+		t.Fatal("automatic browser URL should have no server or proxy origin")
+	}
+	linkPath := "/profiles/" + id + "/links/" + link.ID + "/url"
+	rec = client.request(handler, http.MethodGet, "http://192.0.2.10:8081"+apiPrefix+linkPath, nil, proxyHeaders)
+	expect(t, rec, http.StatusOK)
+	if result := decode[map[string]string](t, rec); result["endpoint"] != "http://192.0.2.10:8081"+suffix {
+		t.Fatal("direct request did not use HTTP Host and port")
+	}
+	handler, err = New(db, Options{MasterKey: masterKey, PublicBaseURL: "https://subscription.example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = client.request(handler, http.MethodGet, path+"/links/"+link.ID+"/url?relative=1", nil, nil)
+	expect(t, rec, http.StatusOK)
+	if result := decode[map[string]string](t, rec); result["endpoint"] != "https://subscription.example.com"+suffix {
+		t.Fatal("explicit public base must take priority")
 	}
 }

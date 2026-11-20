@@ -164,7 +164,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	s.sendSession(w, user, http.StatusCreated)
+	s.sendSession(w, r, user, http.StatusCreated)
 	return nil
 }
 
@@ -201,7 +201,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	s.sendSession(w, user, http.StatusOK)
+	s.sendSession(w, r, user, http.StatusOK)
 	return nil
 }
 
@@ -236,9 +236,9 @@ func (s *Server) sessionCSRF(token string) string {
 	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
-func (s *Server) sendSession(w http.ResponseWriter, user sessionUser, status int) {
+func (s *Server) sendSession(w http.ResponseWriter, r *http.Request, user sessionUser, status int) {
 	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookie, Value: user.token, Path: "/", HttpOnly: true, Secure: s.secureCookie,
+		Name: sessionCookie, Value: user.token, Path: "/", HttpOnly: true, Secure: s.useSecureCookie(r),
 		SameSite: http.SameSiteLaxMode, MaxAge: int(sessionAge / time.Second),
 	})
 	writeJSON(w, status, user)
@@ -293,7 +293,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, user sessionUser
 		return err
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookie, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteLaxMode,
+		Name: sessionCookie, Path: "/", HttpOnly: true, Secure: s.useSecureCookie(r), SameSite: http.SameSiteLaxMode,
 		MaxAge: -1, Expires: time.Unix(1, 0).UTC(),
 	})
 	w.WriteHeader(http.StatusNoContent)

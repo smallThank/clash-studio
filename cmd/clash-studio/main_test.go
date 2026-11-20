@@ -112,6 +112,25 @@ func TestSiteRoutes(t *testing.T) {
 	expect(t, call(t, emptySite, http.MethodGet, "/", nil, nil, nil), http.StatusServiceUnavailable)
 }
 
+func TestPublicBaseURLDefaultsToBrowserAddress(t *testing.T) {
+	t.Setenv("DATA_DIR", t.TempDir())
+	for _, test := range []struct {
+		input string
+		want  string
+	}{
+		{"", ""},
+		{"http://0.0.0.0:8080", ""},
+		{"http://[::]:8080", ""},
+		{"https://clash.example.com:8443/", "https://clash.example.com:8443"},
+	} {
+		t.Setenv("PUBLIC_BASE_URL", test.input)
+		config, err := readSettings()
+		if err != nil || config.publicURL != test.want {
+			t.Fatalf("PUBLIC_BASE_URL %q returned %q, error %v", test.input, config.publicURL, err)
+		}
+	}
+}
+
 type testSession struct {
 	cookie *http.Cookie
 	csrf   string

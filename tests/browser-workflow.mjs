@@ -141,6 +141,7 @@ rules:
   await button('查看链接', modal()).click();
   const endpoint = await modal().locator('textarea').inputValue();
   const address = new URL(endpoint);
+  verify(address.origin === new URL(page.url()).origin, '默认订阅地址未使用当前访问的协议、主机和端口');
   const key = address.searchParams.get('key');
   address.search = '';
   verify(address.pathname.startsWith('/s/') && key, '缺少含密钥的订阅地址');

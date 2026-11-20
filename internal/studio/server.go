@@ -156,7 +156,23 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 		return true
 	}
 	_, origin, err := configuredURL(raw, false)
-	return err == nil && (origin == s.publicOrigin || origin == s.devOrigin || origin == requestBase(r))
+	if err != nil {
+		return false
+	}
+	return origin == s.publicOrigin || origin == s.devOrigin || origin == requestBase(r) ||
+		sameOriginHTTPSProxy(r, origin)
+}
+
+func sameOriginHTTPSProxy(r *http.Request, origin string) bool {
+	// The browser reports same-origin while TLS may terminate before this server.
+	// Require the proxy to preserve the original Host, without trusting forwarded headers.
+	return r.TLS == nil && r.Header.Get("Sec-Fetch-Site") == "same-origin" &&
+		origin == originOf(&url.URL{Scheme: "https", Host: r.Host})
+}
+
+func (s *Server) useSecureCookie(r *http.Request) bool {
+	_, origin, _ := configuredURL(r.Header.Get("Origin"), false)
+	return s.secureCookie || r.TLS != nil || sameOriginHTTPSProxy(r, origin)
 }
 
 type apiHandler func(http.ResponseWriter, *http.Request) error

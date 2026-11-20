@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -37,7 +38,7 @@ func readSettings() (settings, error) {
 		address:   envOr("ADDR", "127.0.0.1:8080"),
 		dataDir:   os.Getenv("DATA_DIR"),
 		frontDir:  envOr("FRONTEND_DIR", "frontend/dist"),
-		publicURL: envOr("PUBLIC_BASE_URL", "http://127.0.0.1:8080"),
+		publicURL: strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")),
 		devOrigin: os.Getenv("DEV_ORIGIN"),
 		masterKey: os.Getenv("CLASH_MASTER_KEY"),
 	}
@@ -49,9 +50,15 @@ func readSettings() (settings, error) {
 		s.dataDir = filepath.Join(configDir, "clash-config-studio")
 	}
 	var err error
-	s.publicURL, err = origin(s.publicURL)
-	if err != nil {
-		return s, fmt.Errorf("PUBLIC_BASE_URL: %w", err)
+	if s.publicURL != "" {
+		s.publicURL, err = origin(s.publicURL)
+		if err != nil {
+			return s, fmt.Errorf("PUBLIC_BASE_URL: %w", err)
+		}
+		parsed, _ := url.Parse(s.publicURL)
+		if ip := net.ParseIP(parsed.Hostname()); ip != nil && ip.IsUnspecified() {
+			s.publicURL = ""
+		}
 	}
 	if s.devOrigin != "" {
 		s.devOrigin, err = origin(s.devOrigin)
@@ -234,7 +241,10 @@ func run() error {
 	defer stop()
 	done := make(chan error, 1)
 	go func() { done <- server.ListenAndServe() }()
-	log.Printf("Clash 配置台监听 %s，客户端地址 %s", s.address, s.publicURL)
+	log.Printf("Clash 配置台监听 %s", s.address)
+	if s.publicURL != "" {
+		log.Printf("订阅公开地址 %s", s.publicURL)
+	}
 	select {
 	case err := <-done:
 		return err

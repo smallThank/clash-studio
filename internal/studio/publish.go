@@ -302,7 +302,7 @@ func (s *Server) getLinkURL(w http.ResponseWriter, r *http.Request, user session
 		return err
 	}
 	base := s.publicBase
-	if base == "" {
+	if base == "" && r.URL.Query().Get("relative") != "1" {
 		base = requestBase(r)
 	}
 	endpoint := base + "/s/" + id + ".yaml"

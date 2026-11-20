@@ -10,14 +10,13 @@
 docker build -t clash-studio:local .
 docker run -d --name clash-studio --restart unless-stopped \
   -p 127.0.0.1:8080:8080 \
-  -e PUBLIC_BASE_URL=http://127.0.0.1:8080 \
   --mount type=volume,source=clash-studio-data,target=/data \
   clash-studio:local
 ```
 
 浏览器打开 <http://127.0.0.1:8080>。可访问 <http://127.0.0.1:8080/healthz> 检查服务。
 
-- **跨设备订阅**。把 `PUBLIC_BASE_URL` 设为 OpenClash 和 Clash Verge Rev 在代理尚未启动时也能访问的地址。使用宿主机 HTTPS 反向代理时，保留上面的本机端口绑定，并将变量设为对外的 HTTPS 域名。若需要容器端口直接对外提供 HTTP，可用 `-p 8080:8080`，并将变量设为对应的访问地址。
+- **跨设备订阅**。页面生成的订阅链接默认使用浏览器当前访问后台的协议、域名或 IP，以及端口。使用宿主机 HTTPS 反向代理时，可保留上面的本机端口绑定，并让反代保留原始 `Host`。直接对外提供 HTTP 时，可用 `-p 8080:8080`。如需统一使用固定的公开地址，再设置 `PUBLIC_BASE_URL`。
 - **数据保留**。命名卷 `clash-studio-data` 保存 SQLite 和自动生成的 `master.key`。更新镜像后重建容器时挂载同一卷。停容器备份时保留卷内数据库和密钥。若使用 `CLASH_MASTER_KEY` 注入密钥，另行保管同一个值。若改用宿主机目录挂载，请让该目录可由 UID/GID `10001:10001` 写入。
 - **镜像架构**。直接在部署服务器构建可获得对应架构的镜像。从 Apple Silicon 将镜像搬到 x86-64 服务器时，构建命令使用 `docker buildx build --platform linux/amd64 --load -t clash-studio:local .`，再用 `docker save` 和 `docker load` 转移。
 
@@ -96,7 +95,7 @@ curl -fsS -H "Authorization: Bearer $CLASH_SUBSCRIPTION_KEY" \
 | 环境变量 | 用途 |
 | --- | --- |
 | `ADDR` | Go 服务监听地址，默认 `127.0.0.1:8080`。 |
-| `PUBLIC_BASE_URL` | 浏览器和代理客户端用于访问站点的公开地址，默认 `http://127.0.0.1:8080`。跨设备使用时填写两端均可访问的 HTTPS 地址，并在前置代理配置 TLS。 |
+| `PUBLIC_BASE_URL` | 可选的固定订阅公开地址。留空时，管理页面使用浏览器当前地址。监听地址 `0.0.0.0` 和 `[::]` 会按留空处理。 |
 | `DATA_DIR` | SQLite 数据目录，默认为当前账户的系统应用配置目录下的 `clash-config-studio`。升级和备份时保留数据库及密钥。 |
 | `CLASH_MASTER_KEY` | 可选的 32 字节 Base64 主密钥。留空时，应用在数据目录首次生成和使用 `master.key`。 |
 | `FRONTEND_DIR` | 前端构建目录，默认 `frontend/dist`。 |

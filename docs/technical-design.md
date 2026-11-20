@@ -18,7 +18,7 @@ flowchart LR
 - 前端采用 Vite、Vue 3、TypeScript，沿用原型的侧栏、工作区、YAML 预览和移动端标签。较长列表使用筛选和分页。表单与 YAML 预览共享字段路径用于错误定位。
 - 后端使用 Go `net/http`、`database/sql`、`github.com/mattn/go-sqlite3` 和 `gopkg.in/yaml.v3`。配置编译、校验和上游获取位于 `internal/config`，账户、API 和 SQLite 位于 `internal/studio`。接口使用 JSON，导出和订阅直接返回 YAML。
 - 初期单实例部署，SQLite 使用本地持久卷，启用迁移、外键、WAL 和 `busy_timeout`。请求读写使用短事务，可通过 SQLite 在线备份机制备份。上游读取在事务外完成。
-- 反向代理终止 TLS，配置公开基址 `PUBLIC_BASE_URL` 生成订阅链接。确认路由器和桌面在代理尚未启动时也能解析并访问该域名。私有部署可使用两端均可访问的内网地址和受信任证书。
+- 反向代理可终止 TLS 并保留原始 `Host`。未指定 `PUBLIC_BASE_URL` 时，管理页面用当前浏览器地址生成订阅链接。若要求统一公开域名，可以配置 `PUBLIC_BASE_URL`。所选地址需要能被 OpenClash 和 Clash Verge Rev 访问。
 - `frontend/` 是连接 Go 服务的正式前端，`prototype/` 保留原型。项目启动与测试命令见 [README](../README.md)。
 
 ## 2. 配置建模与 YAML 编译

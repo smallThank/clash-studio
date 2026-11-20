@@ -31,3 +31,23 @@ test('backend issue metadata survives a rejected export', async t => {
     return true;
   });
 });
+
+test('subscription addresses use the current browser origin unless a public base is supplied', async t => {
+  const origin = 'https://clash.example.com:8443';
+  const priorWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: { origin } } });
+  t.after(() => {
+    if (priorWindow) Object.defineProperty(globalThis, 'window', priorWindow);
+    else Reflect.deleteProperty(globalThis, 'window');
+  });
+  let endpoint = '/s/device.yaml';
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    assert.equal(path, '/api/v1/profiles/configuration/links/device/url?relative=1');
+    return Response.json({ endpoint, url: endpoint + '?key=fixture' });
+  });
+  assert.deepEqual(await api.linkURL('configuration', 'device'), {
+    endpoint: origin + endpoint, url: origin + endpoint + '?key=fixture',
+  });
+  endpoint = 'https://public.example.com/s/device.yaml';
+  assert.deepEqual(await api.linkURL('configuration', 'device'), { endpoint, url: endpoint + '?key=fixture' });
+});
