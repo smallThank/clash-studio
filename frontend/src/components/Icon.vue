@@ -6,6 +6,7 @@ const iconPaths: Record<string, string> = {
   moon: 'M21 13.1A9 9 0 0 1 10.9 3a9 9 0 1 0 10.1 10.1Z',
   plus: 'M12 5v14M5 12h14',
   down: 'm6 9 6 6 6-6',
+  jump: 'M20 7v6a3 3 0 0 1-3 3H5m4-4-4 4 4 4',
   file: 'M6 3h8l4 4v14H6zM14 3v5h4M9 13h6m-6 4h6',
   sliders: 'M4 7h8m4 0h4M4 17h4m4 0h8M12 5v4m-4 6v4',
   globe: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0ZM2 12h20m-10 10c5-5 5-15 0-20-5 5-5 15 0 20Z',

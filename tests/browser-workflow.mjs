@@ -65,7 +65,14 @@ rules:
   await field('解析器').fill('9.9.9.9');
   await field('Fake-IP 过滤').fill('+.lan\n+.example.org');
   await field('搜索Fake-IP 过滤').fill('example');
-  await shown(page.getByText('第 2 行 · +.example.org', { exact: true }));
+  const filterEditor = field('Fake-IP 过滤');
+  await shown(button('第 2 行 +.example.org'));
+  await button('第 2 行 +.example.org').click();
+  verify(await filterEditor.evaluate(el => el.value.slice(el.selectionStart, el.selectionEnd)) === '+.example.org', '搜索结果未定位到规则');
+  await field('搜索Fake-IP 过滤').fill('missing');
+  await shown(page.getByText('没有匹配的规则', { exact: true }));
+  await button('清除搜索').click();
+  await shown(page.getByText('2 条规则', { exact: true }));
   await button('保存草稿').click();
   await shown(preview().getByText(/9\.9\.9\.9/));
 

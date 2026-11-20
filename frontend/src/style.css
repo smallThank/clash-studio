@@ -29,8 +29,6 @@
 .reference-order .icon-btn { width: 28px; height: 28px; }
 .reference-search { max-width: 100%; }
 .field .search input:not([type="checkbox"]) { min-height: 0; border: 0; background: transparent; padding: 0; }
-.field-search-results { max-height: 110px; overflow: auto; margin: 0; padding-left: 21px; }
-.field-search-results li { font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
 .sensitive-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; }
 @media (max-width: 780px) {
   .empty-account { display: inline-flex; }

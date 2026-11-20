@@ -7,6 +7,12 @@ async (page) => {
   const profile = '跨设备布局验收' + 'LongName'.repeat(4);
   const fixture = `mode: rule
 mixed-port: 7890
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-filter:
+    - '*.lan'
+    - '+.${'subdomain'.repeat(15)}.example.invalid'
 proxy-providers:
   ${source}:
     type: http
@@ -99,6 +105,15 @@ rules:
   await dialog().getByRole('heading', { name: '订阅地址' }).waitFor();
   await fit('mobile subscription address', modalAreas);
   await dialog().getByRole('button', { name: '关闭', exact: true }).last().click();
+
+  await mobileSection.selectOption('dns');
+  await page.getByLabel('增强模式').selectOption('redir-host');
+  verify(await page.getByLabel('增强模式').inputValue() === 'redir-host', 'mobile DNS selector failed');
+  await page.getByLabel('搜索Fake-IP 过滤').fill('example');
+  await fit('mobile DNS search', [...contained, '.field-select', '.line-editor', '.line-editor-toolbar', '.line-editor-search', '.line-editor-match']);
+  await page.getByLabel('搜索Fake-IP 过滤').press('Enter');
+  verify(await page.getByLabel('Fake-IP 过滤', { exact: true }).evaluate(el =>
+    el.selectionStart > 0 && el.selectionEnd > el.selectionStart), 'keyboard search did not jump to the matching rule');
 
   await button('深色皮肤').click();
   await button('YAML 预览').click();

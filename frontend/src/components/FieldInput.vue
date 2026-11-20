@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import { moveItem } from '../config.ts';
 import type { Field, InputValue } from '../fields.ts';
 import Icon from './Icon.vue';
@@ -8,6 +8,8 @@ const props = defineProps<{ field: Field; prefix: string }>();
 const model = defineModel<InputValue>({ default: '' });
 const filter = ref('');
 const reveal = ref(false);
+const lineEditor = useTemplateRef<HTMLTextAreaElement>('line-editor');
+const lineSearch = useTemplateRef<HTMLInputElement>('line-search');
 const inputID = computed(() => props.prefix + '-' + props.field.key);
 const selected = computed(() => Array.isArray(model.value) ? model.value : []);
 const value = computed({
@@ -25,9 +27,35 @@ const referenceOptions = computed(() => {
   const options = [...new Set([...selected.value, ...(props.field.options ?? []).map(([key]) => key)])];
   return options.filter(option => option.toLowerCase().includes(filter.value.toLowerCase()));
 });
-const lineMatches = computed(() => value.value.split('\n')
-  .map((line, index) => ({ line, index }))
-  .filter(({ line }) => line.toLowerCase().includes(filter.value.trim().toLowerCase())));
+const query = computed(() => filter.value.trim().toLowerCase());
+const lines = computed(() => value.value.split('\n'));
+const lineCount = computed(() => lines.value.filter(line => line.trim()).length);
+const lineMatches = computed(() => {
+  if (!query.value) return [];
+  let start = 0;
+  return lines.value.flatMap((line, index) => {
+    const offset = line.toLowerCase().indexOf(query.value);
+    const item = { line, index, start, offset };
+    start += line.length + 1;
+    return offset >= 0 ? [item] : [];
+  });
+});
+
+function jumpToLine(match = lineMatches.value[0]) {
+  const editor = lineEditor.value;
+  if (!editor || !match) return;
+  editor.focus({ preventScroll: true });
+  editor.setSelectionRange(match.start, match.start + match.line.length);
+  const lineHeight = Number.parseFloat(getComputedStyle(editor).lineHeight);
+  editor.scrollTop = match.index * lineHeight - (editor.clientHeight - lineHeight) / 2;
+  editor.scrollLeft = 0;
+  editor.scrollIntoView({ block: 'nearest' });
+}
+
+function clearSearch() {
+  filter.value = '';
+  lineSearch.value?.focus();
+}
 
 function toggle(option: string) {
   model.value = selected.value.includes(option) ? selected.value.filter(value => value !== option) : [...selected.value, option];
@@ -60,21 +88,39 @@ function toggle(option: string) {
   </fieldset>
   <div v-else class="field" :class="{ full: ['lines', 'yaml', 'url'].includes(field.kind) }">
     <label :for="inputID">{{ field.label }}</label>
-    <select v-if="field.kind === 'select' || field.kind === 'bool'" :id="inputID" v-model="value"
-      :required="field.required" :aria-describedby="field.hint ? inputID + '-hint' : undefined">
-      <option value="">{{ field.placeholder ?? (field.required ? '请选择' : '沿用默认值') }}</option>
-      <option v-for="[option, label] in choices" :key="option" :value="option">{{ label }}</option>
-    </select>
+    <div v-if="field.kind === 'select' || field.kind === 'bool'" class="field-select">
+      <select :id="inputID" v-model="value" :required="field.required"
+        :aria-describedby="field.hint ? inputID + '-hint' : undefined">
+        <option value="">{{ field.placeholder ?? (field.required ? '请选择' : '沿用默认值') }}</option>
+        <option v-for="[option, label] in choices" :key="option" :value="option">{{ label }}</option>
+      </select>
+      <Icon name="down" :size="16" />
+    </div>
     <template v-else-if="field.kind === 'lines' || field.kind === 'yaml'">
-      <label v-if="field.searchable" class="search">
-        <Icon name="search" :size="16" />
-        <input v-model="filter" type="search" :aria-label="'搜索' + field.label" :placeholder="'搜索' + field.label + '…'" />
-      </label>
-      <ul v-if="field.searchable && filter.trim()" class="field-search-results">
-        <li v-for="match in lineMatches" :key="match.index">第 {{ match.index + 1 }} 行 · {{ match.line }}</li>
-        <li v-if="!lineMatches.length" class="muted">没有匹配的结果</li>
-      </ul>
-      <textarea :id="inputID" v-model="value" :rows="field.key === 'advanced' ? 11 : 3"
+      <div v-if="field.searchable" class="line-editor">
+        <div class="line-editor-toolbar">
+          <div class="line-editor-search">
+            <Icon name="search" :size="16" />
+              <input ref="line-search" v-model="filter" type="search" :aria-label="'搜索' + field.label" placeholder="搜索域名或规则"
+              @keydown.enter.prevent="jumpToLine()" />
+            <button v-if="filter" class="icon-btn" type="button" aria-label="清除搜索" @click="clearSearch"><Icon name="close" :size="14" /></button>
+          </div>
+          <span class="line-editor-count" role="status">{{ query ? lineMatches.length + ' 项匹配' : lineCount + ' 条规则' }}</span>
+        </div>
+        <ul v-if="query && lineMatches.length" class="line-editor-results" aria-label="匹配的规则">
+          <li v-for="match in lineMatches" :key="match.index">
+            <button type="button" class="line-editor-match" @click="jumpToLine(match)">
+              <span class="line-editor-number">第 {{ match.index + 1 }} 行</span>
+              <code>{{ match.line.slice(0, match.offset) }}<mark>{{ match.line.slice(match.offset, match.offset + query.length) }}</mark>{{ match.line.slice(match.offset + query.length) }}</code>
+              <Icon name="jump" :size="15" />
+            </button>
+          </li>
+        </ul>
+        <p v-else-if="query" class="line-editor-empty">没有匹配的规则</p>
+        <textarea :id="inputID" ref="line-editor" v-model="value" class="mono" rows="5" spellcheck="false"
+          :required="field.required" :aria-describedby="field.hint ? inputID + '-hint' : undefined" />
+      </div>
+      <textarea v-else :id="inputID" v-model="value" :rows="field.key === 'advanced' ? 11 : 3"
         :class="{ mono: field.kind === 'yaml' }" spellcheck="false" :required="field.required"
         :aria-describedby="field.hint ? inputID + '-hint' : undefined" />
     </template>

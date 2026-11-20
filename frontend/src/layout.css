@@ -156,3 +156,143 @@ dialog[open] {
   #dialog-form { display: block; }
   .dialog-body { overflow: visible; }
 }
+
+.field-select {
+  position: relative;
+  display: flex;
+  min-inline-size: 0;
+}
+.field-select > select {
+  appearance: none;
+  cursor: pointer;
+  padding-inline: .75rem 2.5rem;
+  text-overflow: ellipsis;
+}
+.field-select > svg {
+  position: absolute;
+  inset-inline-end: .875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.field-select > select:disabled { cursor: default; }
+@media (forced-colors: active) {
+  .field-select > select { appearance: auto; padding-inline-end: .75rem; }
+  .field-select > svg { display: none; }
+}
+
+.line-editor {
+  --editor-bar: #f6f4ed;
+  --editor-input: #fffefa;
+  --editor-hover: #f3efe6;
+  --match-ink: #793821;
+  --match-fill: #f6e3d4;
+  --editor-focus: #a13d2b;
+  display: grid;
+  min-inline-size: 0;
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  background: var(--surface);
+}
+[data-theme="dark"] .line-editor {
+  --editor-bar: #26292d;
+  --editor-input: #1c1e20;
+  --editor-hover: #30343a;
+  --match-ink: #ffccb9;
+  --match-fill: #53342e;
+  --editor-focus: var(--focus);
+}
+.line-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .375rem .75rem;
+  padding: .375rem .625rem;
+  background: var(--editor-bar);
+  border-block-end: 1px solid var(--line);
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
+}
+.line-editor-search {
+  display: flex;
+  flex: 1 1 11rem;
+  min-inline-size: 0;
+  align-items: center;
+  gap: .5rem;
+  padding-inline-start: .625rem;
+  color: var(--muted);
+  background: var(--editor-input);
+  border: 1px solid var(--line);
+  border-radius: .375rem;
+}
+.line-editor-search:focus-within { border-color: var(--editor-focus); }
+.field .line-editor-search > input[type="search"] {
+  flex: 1 1 0;
+  min-block-size: 2.25rem;
+  border: 0;
+  border-radius: 0;
+  padding: .375rem .375rem .375rem 0;
+  background: transparent;
+  outline: none;
+}
+.line-editor-search > input::-webkit-search-cancel-button { appearance: none; }
+.line-editor-search > .icon-btn {
+  inline-size: 2rem;
+  min-inline-size: 2rem;
+  min-block-size: 2rem;
+  margin-inline-end: .125rem;
+}
+.line-editor-count {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.line-editor-results, .line-editor-empty {
+  margin: 0;
+  border-block-end: 1px solid var(--line);
+}
+.line-editor-results {
+  padding: .25rem;
+  max-block-size: 10rem;
+  overflow: auto;
+  list-style: none;
+}
+.line-editor-empty { padding: .625rem .875rem; color: var(--muted); font-weight: 400; }
+.line-editor-match {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .625rem;
+  inline-size: 100%;
+  min-block-size: 2.125rem;
+  padding: .3125rem .5rem;
+  border: 0;
+  border-radius: .3125rem;
+  background: transparent;
+  text-align: start;
+}
+.line-editor-match:hover { background: var(--editor-hover); }
+.line-editor-match:focus-visible { outline-offset: -2px; }
+.line-editor-match :is(.line-editor-number, svg) { color: var(--muted); }
+.line-editor-number { font-size: .75rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.line-editor-match code { font-size: .8125rem; overflow-wrap: anywhere; }
+.line-editor-match mark, .line-editor textarea::selection { color: var(--match-ink); background: var(--match-fill); }
+.line-editor-match mark { border-radius: .125rem; }
+.field .line-editor > textarea {
+  display: block;
+  border: 0;
+  border-radius: 0 0 .5rem .5rem;
+  background: var(--editor-input);
+  padding: .625rem .75rem;
+  line-height: 1.55;
+  white-space: pre;
+}
+.line-editor > textarea:focus-visible { outline-color: var(--editor-focus); outline-offset: -2px; }
+
+@media (max-width: 780px) {
+  .field .line-editor-search > input[type="search"], .line-editor-search > .icon-btn, .line-editor-match { min-block-size: 2.75rem; }
+  .line-editor-search > .icon-btn { min-inline-size: 2.75rem; }
+}
