@@ -39,6 +39,11 @@ export interface Version {
   createdAt: string;
 }
 
+export interface SubscriptionKey {
+  key: string;
+  updatedAt: string;
+}
+
 export interface SubscriptionLink {
   id: string;
   label: string;
@@ -161,7 +166,9 @@ export const api = {
     json<Draft>(profilePath(id, '/versions/' + version + '/restore'), 'POST', { expectedDraftRev }),
   links: (id: string) => json<{ links: SubscriptionLink[] }>(profilePath(id, '/links')),
   addLink: (id: string, label: string) => json<SubscriptionLink>(profilePath(id, '/links'), 'POST', { label }),
-  linkURL: (id: string, link: string) => json<{ url: string }>(linkPath(id, link, '/url')),
+  linkURL: (id: string, link: string) => json<{ url: string; endpoint: string }>(linkPath(id, link, '/url')),
+  subscriptionKey: (id: string) => json<SubscriptionKey>(profilePath(id, '/subscription-key')),
+  rotateSubscriptionKey: (id: string) => json<SubscriptionKey>(profilePath(id, '/subscription-key/rotate'), 'POST', {}),
   revokeLink: (id: string, link: string) => request(linkPath(id, link), 'DELETE'),
   probe: (input: { mode: SourceMode; yaml?: string; url?: string; userAgent?: string }) =>
     json<Probe>('/imports/probe', 'POST', input),

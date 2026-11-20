@@ -14,7 +14,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 const schema = `
 CREATE TABLE users (
@@ -95,8 +95,28 @@ CREATE INDEX stages_by_expiry ON import_stages(expires_at);
 CREATE INDEX stages_by_owner ON import_stages(owner_id, expires_at);
 `
 
-func migrate(ctx context.Context, db *sql.DB) error {
-	tx, err := db.BeginTx(ctx, nil)
+const subscriptionKeyMigration = `
+CREATE TABLE profile_subscription_keys (
+    profile_id TEXT PRIMARY KEY NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    key_digest BLOB NOT NULL UNIQUE,
+    sealed_key BLOB NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE TABLE subscription_links_v2 (
+    id TEXT PRIMARY KEY NOT NULL,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    revoked_at INTEGER
+);
+INSERT INTO subscription_links_v2 SELECT id, profile_id, label, created_at, revoked_at FROM subscription_links;
+DROP TABLE subscription_links;
+ALTER TABLE subscription_links_v2 RENAME TO subscription_links;
+CREATE INDEX links_by_profile ON subscription_links(profile_id, created_at, id);
+`
+
+func (s *Server) migrate(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("start SQLite migration: %w", err)
 	}
@@ -112,13 +132,49 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		if _, err := tx.ExecContext(ctx, schema); err != nil {
 			return fmt.Errorf("create SQLite schema: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 1"); err != nil {
-			return fmt.Errorf("record SQLite schema version: %w", err)
+		fallthrough
+	case 1:
+		if err := s.migrateSubscriptionKeys(ctx, tx); err != nil {
+			return fmt.Errorf("migrate subscription keys: %w", err)
 		}
-		return tx.Commit()
 	default:
 		return fmt.Errorf("unsupported SQLite schema version %d", version)
 	}
+	if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
+		return fmt.Errorf("record SQLite schema version: %w", err)
+	}
+	return tx.Commit()
+}
+
+func (s *Server) migrateSubscriptionKeys(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, subscriptionKeyMigration); err != nil {
+		return err
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM profiles")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var profiles []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		profiles = append(profiles, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, id := range profiles {
+		if _, err := s.replaceSubscriptionKey(ctx, tx, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func newAEAD(key []byte) (cipher.AEAD, error) {

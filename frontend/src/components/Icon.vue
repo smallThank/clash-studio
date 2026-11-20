@@ -2,6 +2,8 @@
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 18 });
 const iconPaths: Record<string, string> = {
   mark: 'M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M13 4v4M7 10v4M15 16v4',
+  sun: 'M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
+  moon: 'M21 13.1A9 9 0 0 1 10.9 3a9 9 0 1 0 10.1 10.1Z',
   plus: 'M12 5v14M5 12h14',
   down: 'm6 9 6 6 6-6',
   file: 'M6 3h8l4 4v14H6zM14 3v5h4M9 13h6m-6 4h6',

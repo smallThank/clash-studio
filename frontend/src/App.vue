@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, shallowRef, useTemplateRef } from 'vue';
 import { APIError, api, clearSession } from './api.ts';
-import type { Account, Draft, Issue, Profile, RefreshPreview, Rename, SubscriptionLink, Target, Version } from './api.ts';
+import type { Account, Draft, Issue, Profile, RefreshPreview, Rename, SubscriptionKey, SubscriptionLink, Target, Version } from './api.ts';
 import { basicKeys, draftPatch, insertRules, isEntityKey, listFor, modules, moveItem, parseRule, parseYAML, targets, withEntity } from './config.ts';
 import type { Config, EntityKey, ModuleKey, SettingsKey } from './config.ts';
 import { applySettings } from './fields.ts';
@@ -13,6 +13,7 @@ import Icon from './components/Icon.vue';
 import ImportForm from './components/ImportForm.vue';
 import ModalDialog from './components/ModalDialog.vue';
 import YamlPane from './components/YamlPane.vue';
+import ThemeToggle from './components/ThemeToggle.vue';
 
 const account = shallowRef<Account | null>(null);
 const authMode = ref<'login' | 'register'>('login');
@@ -39,7 +40,7 @@ const editor = useTemplateRef<InstanceType<typeof EditorPane>>('editor');
 let checkSequence = 0;
 
 type Popup = 'new' | 'manage' | 'remove-profile' | 'entity' | 'remove-entity' | 'bulk' | 'check' | 'publish' | 'links' |
-  'new-link' | 'revoke' | 'link-content' | 'versions' | 'restore' | 'diff' | 'refresh' | 'account';
+  'new-link' | 'revoke' | 'link-content' | 'versions' | 'restore' | 'diff' | 'refresh' | 'account' | 'subscription-key' | 'rotate-key' | 'subscription-url';
 const modal = ref<Popup | null>(null);
 const modalError = ref('');
 const entity = useTemplateRef<InstanceType<typeof EntityForm>>('entity');
@@ -55,6 +56,9 @@ const linkName = ref('');
 const links = shallowRef<SubscriptionLink[]>([]);
 const activeLink = shallowRef<SubscriptionLink>();
 const linkURL = ref('');
+const linkEndpoint = ref('');
+const subscriptionKey = shallowRef<SubscriptionKey>();
+const keyVisible = ref(false);
 const versions = shallowRef<Version[]>([]);
 const version = shallowRef<Version>();
 const comparison = shallowRef<{ before: string; beforeLabel: string }>();
@@ -66,7 +70,7 @@ let notificationTimer: ReturnType<typeof setTimeout> | undefined;
 const modalTitles: Record<Popup, string> = {
   new: '新建配置', manage: '配置管理', 'remove-profile': '删除配置', entity: '编辑条目', 'remove-entity': '删除条目',
   bulk: '批量添加规则', check: '配置校验', publish: '发布订阅', links: '订阅链接', 'new-link': '新建订阅链接', revoke: '吊销订阅链接',
-  'link-content': '订阅地址', versions: '发布记录', restore: '恢复历史版本', diff: '比较版本', refresh: '刷新原始订阅', account: '当前账户',
+  'link-content': '复制内容', 'subscription-url': '订阅地址', 'subscription-key': '订阅密钥', 'rotate-key': '轮换订阅密钥', versions: '发布记录', restore: '恢复历史版本', diff: '比较版本', refresh: '刷新原始订阅', account: '当前账户',
 };
 const entryLabel = computed(() => editingKind.value === 'rules' ? '第 ' + ((currentEntry.value?.index ?? 0) + 1) + ' 条规则' : currentEntry.value?.name);
 const modalTitle = computed(() => {
@@ -80,7 +84,7 @@ const modalTitle = computed(() => {
 });
 const submitLabels: Partial<Record<Popup, string>> = {
   new: '创建配置', manage: '保存', 'remove-profile': '确认删除', entity: '保存到草稿', 'remove-entity': '确认删除',
-  bulk: '添加到草稿', publish: '确认发布', 'new-link': '生成订阅地址', revoke: '确认吊销', restore: '恢复到草稿', refresh: '应用更新',
+  bulk: '添加到草稿', publish: '确认发布', 'new-link': '生成订阅地址', revoke: '确认吊销', restore: '恢复到草稿', refresh: '应用更新', 'rotate-key': '确认轮换',
 };
 
 function notify(message: string) {
@@ -104,6 +108,9 @@ function resetSession() {
   comparison.value = undefined;
   refresh.value = undefined;
   linkURL.value = '';
+  linkEndpoint.value = '';
+  subscriptionKey.value = undefined;
+  keyVisible.value = false;
   links.value = [];
   currentEntry.value = undefined;
   text.value = '';
@@ -228,6 +235,9 @@ function closeDialog() {
   modal.value = null;
   modalError.value = '';
   linkURL.value = '';
+  linkEndpoint.value = '';
+  subscriptionKey.value = undefined;
+  keyVisible.value = false;
   text.value = '';
   currentEntry.value = undefined;
   comparison.value = undefined;
@@ -376,7 +386,14 @@ async function showLink(link: SubscriptionLink) {
   if (!profile.value) return;
   const result = await api.linkURL(profile.value.id, link.id);
   linkURL.value = result.url;
-  openDialog('link-content');
+  linkEndpoint.value = result.endpoint;
+  openDialog('subscription-url');
+}
+async function showSubscriptionKey() {
+  if (!profile.value) return;
+  subscriptionKey.value = await api.subscriptionKey(profile.value.id);
+  keyVisible.value = false;
+  openDialog('subscription-key');
 }
 async function openCompare(value?: Version) {
   if (!profile.value || !draft.value) return;
@@ -476,6 +493,13 @@ async function submitDialog() {
         await showLinks(id);
         return;
       }
+      case 'rotate-key': {
+        subscriptionKey.value = await api.rotateSubscriptionKey(id);
+        keyVisible.value = false;
+        openDialog('subscription-key');
+        notify('密钥已轮换，请更新客户端中的订阅地址。');
+        return;
+      }
       case 'revoke': {
         if (!activeLink.value) return;
         await api.revokeLink(id, activeLink.value.id);
@@ -528,6 +552,7 @@ function timeLabel(value: string) {
     </div>
   </main>
   <main v-else-if="!account" class="auth-page">
+    <ThemeToggle class="auth-theme" />
     <Brand />
     <div class="auth-card">
       <h1>{{ authMode === 'login' ? '登录配置台' : '注册账号' }}</h1>
@@ -573,11 +598,14 @@ function timeLabel(value: string) {
     <div class="page">
       <header class="topbar">
         <div class="top-context"><Icon name="file" :size="16" /><span class="crumb">配置</span><span class="separator">/</span><strong>{{ profile?.name ?? '我的配置' }}</strong></div>
-        <div v-if="profile" class="top-actions">
-          <button type="button" class="btn secondary" :disabled="busy || !draft" @click="download"><Icon name="download" :size="17" /><span>下载 YAML</span></button>
-          <button type="button" class="btn primary" :disabled="busy || !draft" @click="openPublish"><Icon name="upload" :size="17" /><span>发布订阅</span></button>
+        <div class="top-actions">
+          <ThemeToggle />
+          <template v-if="profile">
+            <button type="button" class="btn secondary" :disabled="busy || !draft" @click="download"><Icon name="download" :size="17" /><span>下载 YAML</span></button>
+            <button type="button" class="btn primary" :disabled="busy || !draft" @click="openPublish"><Icon name="upload" :size="17" /><span>发布订阅</span></button>
+          </template>
+          <button v-else type="button" class="icon-btn empty-account" aria-label="账户" :disabled="busy" @click="openDialog('account')"><Icon name="user" /></button>
         </div>
-        <button v-else type="button" class="icon-btn empty-account" aria-label="账户" :disabled="busy" @click="openDialog('account')"><Icon name="user" /></button>
       </header>
       <div v-if="profile" class="mobile-controls">
         <label>配置<select id="mobile-profile" aria-label="选择配置" :value="selectedID" :disabled="busy"
@@ -649,6 +677,7 @@ function timeLabel(value: string) {
       <div class="manager-commands">
         <button type="button" class="btn secondary" :disabled="busy" @click="run(openVersions)">发布记录</button>
         <button type="button" class="btn secondary" :disabled="busy" @click="run(() => showLinks())">订阅链接</button>
+        <button type="button" class="btn secondary" :disabled="busy" @click="run(showSubscriptionKey)">密钥管理</button>
         <button v-if="profile?.hasSource" type="button" class="btn secondary" :disabled="busy" @click="run(openRefresh)">刷新原始订阅</button>
       </div>
     </template>
@@ -685,7 +714,7 @@ function timeLabel(value: string) {
     <template v-else-if="modal === 'links'">
       <p v-if="!profile?.publishedVersion">发布草稿后，即可查看和管理订阅链接。</p>
       <template v-else>
-        <p>将订阅地址粘贴到 OpenClash 或 Clash Verge Rev 的远程订阅。</p>
+        <p>复制含密钥的完整地址，粘贴到 OpenClash 或 Clash Verge Rev 的远程订阅。</p>
         <div class="link-list">
           <div v-for="link in links" :key="link.id" class="link-item">
             <strong>{{ link.label }}</strong><span class="muted">{{ link.revokedAt ? '已吊销' : '创建于 ' + timeLabel(link.createdAt) }}</span>
@@ -702,6 +731,27 @@ function timeLabel(value: string) {
       <input v-model="linkName" required maxlength="40" placeholder="例如：客厅路由器" />
     </label>
     <p v-else-if="modal === 'revoke'">吊销「{{ activeLink?.label }}」？对应设备之后无法通过此地址读取配置。</p>
+    <template v-else-if="modal === 'subscription-key' && subscriptionKey">
+      <div class="field">
+        <label for="subscription-key">当前配置密钥</label>
+        <div class="sensitive-field">
+          <input id="subscription-key" class="mono" :type="keyVisible ? 'text' : 'password'" :value="subscriptionKey.key" readonly />
+          <button type="button" class="btn secondary" :aria-pressed="keyVisible" @click="keyVisible = !keyVisible">{{ keyVisible ? '隐藏' : '显示' }}</button>
+        </div>
+        <small>更新于 {{ timeLabel(subscriptionKey.updatedAt) }}。此密钥适用于当前配置的所有订阅链接。</small>
+      </div>
+    </template>
+    <p v-else-if="modal === 'rotate-key'">轮换后，当前配置的所有旧订阅地址会立即失效。请在各客户端更新为带新密钥的地址。</p>
+    <template v-else-if="modal === 'subscription-url'">
+      <label class="field">完整订阅地址
+        <textarea class="mono" :value="linkURL" rows="3" readonly />
+        <small>地址包含密钥，持有该地址即可读取此配置。</small>
+      </label>
+      <label class="field subscription-endpoint">接口地址
+        <input class="mono" :value="linkEndpoint" readonly />
+        <small>程序调用可通过 Authorization: Bearer 请求头传入配置密钥。</small>
+      </label>
+    </template>
     <label v-else-if="modal === 'link-content'" class="field">复制内容
       <textarea id="copy-content" class="mono" :value="linkURL" rows="4" readonly />
     </label>
@@ -744,6 +794,12 @@ function timeLabel(value: string) {
           @click="linkName = ''; openDialog('new-link')"><Icon name="plus" :size="17" />新建链接</button>
         <button v-else class="btn primary" type="button" :disabled="busy" @click="openPublish"><Icon name="upload" :size="17" />发布订阅</button>
       </template>
+      <button v-if="modal === 'links'" type="button" class="btn secondary" :disabled="busy" @click="run(showSubscriptionKey)">密钥管理</button>
+      <template v-if="modal === 'subscription-key' && subscriptionKey">
+        <button type="button" class="btn danger" :disabled="busy" @click="openDialog('rotate-key')">轮换密钥</button>
+        <button type="button" class="btn secondary" @click="copy(subscriptionKey.key, '已复制密钥。')">复制密钥</button>
+      </template>
+      <button v-if="modal === 'subscription-url'" type="button" class="btn primary" @click="copy(linkURL, '已复制订阅地址。')">复制完整地址</button>
       <button v-if="modal === 'link-content'" class="btn primary" type="button"
         @click="copy(linkURL, '已复制内容。')"><Icon name="copy" :size="17" />复制</button>
       <button v-if="modal === 'account'" class="btn danger" type="button" :disabled="busy" @click="logout">

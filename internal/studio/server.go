@@ -99,15 +99,15 @@ func New(db *sql.DB, opts Options) (http.Handler, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if err := migrate(ctx, db); err != nil {
-		return nil, err
-	}
 	h := hmac.New(sha256.New, opts.MasterKey)
 	h.Write([]byte("clash-studio/session-csrf/v1"))
 	server := &Server{
 		db: db, aead: aead, csrfKey: h.Sum(nil), publicBase: base, publicOrigin: origin,
 		devOrigin: devOrigin, secureCookie: opts.SecureCookies, fetch: importFetcher(opts.Fetch),
 		passwordWork: make(chan struct{}, 4),
+	}
+	if err := server.migrate(ctx); err != nil {
+		return nil, err
 	}
 	return server.routes(), nil
 }
@@ -297,6 +297,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/imports/probe", s.protected(true, s.probeImport))
 	mux.HandleFunc("POST /api/v1/profiles/{profile}/imports/refresh", s.protected(true, s.refreshImport))
 	mux.HandleFunc("/api/v1/", s.api(func(http.ResponseWriter, *http.Request) error { return notFound() }))
+	mux.HandleFunc("GET /api/v1/profiles/{profile}/subscription-key", s.protected(false, s.getSubscriptionKey))
+	mux.HandleFunc("POST /api/v1/profiles/{profile}/subscription-key/rotate", s.protected(true, s.rotateSubscriptionKey))
 	mux.HandleFunc("GET /s/{filename}", s.serveSubscription)
 	return mux
 }

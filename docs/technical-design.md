@@ -11,7 +11,7 @@ flowchart LR
     U["浏览器 · Vite"] -->|"HTTPS /api/v1"| G["Go Web 服务"]
     G -->|"草稿、版本、链接、会话"| S[("SQLite")]
     G -->|"显式导入或刷新"| P["上游订阅地址"]
-    C["OpenClash / Clash Verge Rev"] -->|"HTTPS GET /s/{token}.yaml"| G
+    C["OpenClash / Clash Verge Rev"] -->|"HTTPS GET /s/{linkId}.yaml"| G
     C -->|"按配置拉取节点和规则"| R["Provider 资源"]
 ```
 
@@ -63,12 +63,13 @@ flowchart LR
 | `profiles` | `id`，`owner_id FK`，`name`，`target`，`draft_yaml`，`draft_rev`，`published_version_id` 可空，`updated_at`。按 `owner_id, updated_at` 建索引，发布指针只可引用当前配置的版本。 |
 | `profile_imports` | `profile_id FK`，`source_url`，`user_agent`，`base_yaml`，`last_fetched_at`，`content_sha256`。记录完整配置上游导入基线。 |
 | `profile_versions` | `id`，`profile_id FK`，`version`，`draft_rev`，`yaml`，`content_sha256`，`created_at`，以及 `UNIQUE(profile_id, version)` 和 `UNIQUE(profile_id, draft_rev)`。 |
-| `subscription_links` | `id`，`profile_id FK`，`label`，`token_digest UNIQUE`，`token`，`created_at`，`revoked_at` 可空。多个设备可分别持有链接。 |
+| `subscription_links` | `id`，`profile_id FK`，`label`，`created_at`，`revoked_at` 可空。多个设备可分别持有链接。 |
+| `profile_subscription_keys` | `profile_id PK/FK`，`key_digest UNIQUE`，`sealed_key`，`updated_at`。每份配置有一把密钥。 |
 | `import_stages` | `id`，`owner_id FK`，可选 `profile_id FK`，导入内容、基线摘要、草稿修订号及过期时间。临时保存待确认的导入或更新。 |
 
 按账户和配置 ID 做每一次变更与读取的授权。草稿使用乐观锁 `UPDATE … WHERE id=? AND owner_id=? AND draft_rev=?`，不匹配返回冲突。重试已发布的草稿修订时返回已有版本，保留当前发布指针。首次尝试发布已经被编辑更新的草稿修订时返回版本冲突。删除配置在一个事务内移除导入基线、版本和链接，先清空发布指针以满足外键约束。
 
-保留文档整体加密，避免遗漏藏在高级 YAML 中的凭据。含敏感信息的列使用应用层 AEAD 加密，存储密钥版本和 nonce，密钥由部署环境注入。订阅 Token 使用 32 字节随机数，经 Base64URL 编码。数据库以 digest 查找，并通过加密列支持登录后重复制链接；默认列表遮盖 Token。应用日志仅记录链接 ID 或请求 ID，不记录原始 URL、Token、密码、YAML 正文。反向代理为外部订阅路径配置脱敏日志。备份需同时有受限访问的密钥备份，以便恢复。
+保留文档整体加密，避免遗漏藏在高级 YAML 中的凭据。含敏感信息的列使用应用层 AEAD 加密，存储密钥版本和 nonce，密钥由部署环境注入。订阅密钥使用 32 字节随机数，经 Base64URL 编码。公开接口同时匹配链接 ID 和配置密钥摘要。密钥加密存储，只有配置所有者可查看和轮换。反向代理应对订阅请求的查询参数配置脱敏日志。备份需同时有受限访问的密钥备份，以便恢复。
 
 ## 4. HTTP 接口
 
@@ -86,9 +87,10 @@ flowchart LR
 | `POST /profiles/{id}/publish`、`GET /profiles/{id}/versions` | 发布指定修订，获取版本列表。 |
 | `POST /profiles/{id}/versions/{version}/restore` | 指定当前草稿修订，将历史版本恢复至新草稿。 |
 | `GET /profiles/{id}/links`、`POST /profiles/{id}/links`、`GET /profiles/{id}/links/{link}/url`、`DELETE /profiles/{id}/links/{link}` | 管理链接、按需查看完整链接、吊销。已发布版本可创建链接，一个链接可对应一台设备。 |
-| `GET /s/{token}.yaml`、`HEAD /s/{token}.yaml` | 对 OpenClash 和 Clash Verge Rev 返回同一份已发布 YAML。Token 即该链接的读取权限，客户端无需交互式登录。 |
+| `GET /profiles/{id}/subscription-key`、`POST /profiles/{id}/subscription-key/rotate` | 所有者读取或轮换此配置的密钥。轮换立即使旧密钥失效，发布版本和设备链接记录保留。 |
+| `GET /s/{linkId}.yaml`、`HEAD /s/{linkId}.yaml` | 对 OpenClash 和 Clash Verge Rev 返回同一份已发布 YAML。需要提供 `?key=<配置密钥>` 或 `Authorization: Bearer <配置密钥>`，客户端无需交互式登录。 |
 
-订阅成功返回 `200 OK`、`Content-Type: application/yaml; charset=utf-8`、基于快照摘要的 `ETag`、`Cache-Control: private, no-store`，验证权限后可对匹配的 `If-None-Match` 返回 `304`。缺失、已吊销、未发布的资源统一返回 `404`，无需登录跳转。链接停用后，后续请求无法获得新内容，客户端保存过的版本可能仍在本地。订阅接口对一条链接的读取保持原子性，详见发布事务。内部 JSON 错误含 `code`、`message`、可选 `issues[{severity, path, message}]` 和 `requestId`。草稿冲突使用 `409`，非法配置使用 `422`，限速使用 `429`。
+订阅成功返回 `200 OK`、`Content-Type: application/yaml; charset=utf-8`、基于快照摘要的 `ETag`、`Cache-Control: private, no-store`，验证权限后可对匹配的 `If-None-Match` 返回 `304`。密钥缺失或不匹配、链接已吊销、配置未发布时统一返回 `404`，无需登录跳转。链接停用后，后续请求无法获得新内容，客户端保存过的版本可能仍在本地。订阅接口对一条链接的读取保持原子性，详见发布事务。内部 JSON 错误含 `code`、`message`、可选 `issues[{severity, path, message}]` 和 `requestId`。草稿冲突使用 `409`，非法配置使用 `422`，限速使用 `429`。
 
 ## 5. 开发顺序与联调
 

@@ -78,6 +78,19 @@ go run ./cmd/clash-studio
 
 开发时可在另一终端运行 `npm --prefix frontend run dev`。Vite 默认将 API 和订阅请求转发到 `http://127.0.0.1:8080`，可通过 `CLASH_API_ORIGIN` 调整后端地址。启动 Go 服务时，可将开发页面的地址（例如 `http://127.0.0.1:5173`）设置为 `DEV_ORIGIN`。
 
+## 主题与订阅密钥
+
+页面右上角可切换浅色和深色皮肤。首次访问跟随系统外观，手动选择后保存在当前浏览器。
+
+每份配置在创建时生成独立密钥。打开「配置管理 → 密钥管理」可查看、复制或轮换。发布后，在「订阅链接 → 查看链接」复制带 `?key=` 的完整地址，直接粘贴到 OpenClash 或 Clash Verge Rev。程序也可以用同一接口地址和 `Authorization: Bearer` 请求头读取 YAML。
+
+```sh
+curl -fsS -H "Authorization: Bearer $CLASH_SUBSCRIPTION_KEY" \
+  'https://clash.example.com/s/替换为实际链接ID.yaml'
+```
+
+重新发布会更新订阅内容。轮换密钥后，此配置的旧订阅地址立即失效，需要在客户端粘贴带新密钥的地址。升级旧版本时，数据库会为原有配置生成密钥，保留已发布的 YAML 和设备链接记录。请从页面重新复制订阅地址。
+
 ## 持久化与订阅访问
 
 | 环境变量 | 用途 |

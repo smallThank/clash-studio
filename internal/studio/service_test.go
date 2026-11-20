@@ -209,7 +209,8 @@ func defaultLink(t *testing.T, handler http.Handler, client testClient, projectP
 	rec = client.request(handler, http.MethodGet, projectPath+"/links/"+link.ID+"/url", nil, nil)
 	expect(t, rec, http.StatusOK)
 	address := decode[map[string]string](t, rec)["url"]
-	if !strings.HasPrefix(address, browserOrigin+"/s/") || !strings.HasSuffix(address, ".yaml") {
+	parsed, err := url.Parse(address)
+	if err != nil || !strings.HasPrefix(address, browserOrigin+"/s/") || !strings.HasSuffix(parsed.Path, ".yaml") || !validToken(parsed.Query().Get("key")) {
 		t.Fatal("subscription uses incorrect scheme, host or suffix")
 	}
 	return link, address
@@ -278,14 +279,14 @@ func TestPublishSnapshotsAcrossRestart(t *testing.T) {
 	}
 	var sealedDraft, sealedVersion, sealedLink []byte
 	if err := db.QueryRow(`
-		SELECT p.draft_yaml, v.yaml, l.token FROM profiles p
+		SELECT p.draft_yaml, v.yaml, k.sealed_key FROM profiles p
 		JOIN profile_versions v ON v.id = p.published_version_id
-		JOIN subscription_links l ON l.profile_id = p.id WHERE p.id = ?`, profile.ID,
+		JOIN profile_subscription_keys k ON k.profile_id = p.id WHERE p.id = ?`, profile.ID,
 	).Scan(&sealedDraft, &sealedVersion, &sealedLink); err != nil {
 		t.Fatal(err)
 	}
 	if bytes.Contains(sealedDraft, []byte("sample-test-controller-secret")) || bytes.Contains(sealedVersion, []byte("sample-test-controller-secret")) ||
-		bytes.Contains(sealedLink, []byte(strings.TrimSuffix(strings.TrimPrefix(externalURL, browserOrigin+"/s/"), ".yaml"))) {
+		bytes.Contains(sealedLink, []byte(strings.SplitN(externalURL, "?key=", 2)[1])) {
 		t.Fatal("sensitive YAML or token stored in plaintext")
 	}
 	if err := db.Close(); err != nil {

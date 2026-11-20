@@ -46,6 +46,15 @@ rules:
   await shown(page.getByRole('heading', { name: profile }));
   await shown(page.getByRole('heading', { name: '代理组' }));
   await shown(preview());
+  const theme = button('深色皮肤');
+  await theme.click();
+  verify(await theme.getAttribute('aria-pressed') === 'true', '深色皮肤切换失败');
+  await page.reload();
+  await shown(theme);
+  verify(await theme.getAttribute('aria-pressed') === 'true', '刷新后没有保留主题');
+  verify(await page.locator('html').getAttribute('data-theme') === 'dark', '页面没有应用深色皮肤');
+  await theme.click();
+  verify(await theme.getAttribute('aria-pressed') === 'false', '浅色皮肤切换失败');
   verify((await preview().innerText()).includes('mode: Rule'), '文件导入应保留模式的原始写法');
 
   await section('常规设置');
@@ -124,12 +133,18 @@ rules:
   await shown(modal().getByRole('heading', { name: '订阅链接 · v1' }));
   await button('查看链接', modal()).click();
   const endpoint = await modal().locator('textarea').inputValue();
-  verify(new URL(endpoint).pathname.startsWith('/s/'), '缺少可访问的订阅地址');
+  const address = new URL(endpoint);
+  const key = address.searchParams.get('key');
+  address.search = '';
+  verify(address.pathname.startsWith('/s/') && key, '缺少含密钥的订阅地址');
   const unauthenticated = await page.context().browser().newContext();
   try {
     const first = await unauthenticated.request.get(endpoint);
     verify(first.status() === 200 && first.headers()['content-type'].startsWith('application/yaml'), '公开订阅应返回 YAML');
     const firstYAML = await first.text();
+    verify((await unauthenticated.request.get(address.href)).status() === 404, '无密钥请求读取了订阅');
+    const bearer = await unauthenticated.request.get(address.href, { headers: { Authorization: 'Bearer ' + key } });
+    verify(bearer.status() === 200 && (await bearer.text()) === firstYAML, 'Bearer 调用未返回发布版本');
     const groupYAML = firstYAML.split('proxy-groups:')[1].split(/\n[^\s]/)[0];
     verify(groupYAML.includes('测试出口') && groupYAML.indexOf('测试出口') < groupYAML.indexOf('DIRECT'), '显式组成员未按表单顺序导出');
     verify(firstYAML.includes('dialer-proxy: 重命名中继') && firstYAML.includes('RULE-SET,测试规则集,节点选择'), '已发布配置缺少引用或规则');
@@ -145,10 +160,24 @@ rules:
     await shown(modal().getByRole('heading', { name: '订阅链接 · v2' }));
     const second = await unauthenticated.request.get(endpoint);
     verify(second.status() === 200 && (await second.text()).includes('mixed-port: 7898'), '原链接未更新至第二版');
+    await button('密钥管理', modal()).click();
+    const keyInput = field('当前配置密钥', modal());
+    verify(await keyInput.getAttribute('type') === 'password', '订阅密钥未默认遮盖');
+    await button('显示', modal()).click();
+    verify(await keyInput.inputValue() === key, '密钥管理显示的密钥与链接不符');
+    await button('轮换密钥', modal()).click();
+    await button('确认轮换', modal()).click();
+    await shown(modal().getByRole('heading', { name: '订阅密钥' }));
+    const rotated = await keyInput.inputValue();
+    verify(rotated !== key && (await unauthenticated.request.get(endpoint)).status() === 404, '轮换后旧密钥仍然有效');
+    await close();
+    await button('管理订阅链接').click();
+    const replacement = address.href + '?key=' + rotated;
+    verify((await unauthenticated.request.get(replacement)).status() === 200, '轮换后相同接口未接受新密钥');
     await button('吊销', modal()).click();
     await button('确认吊销', modal()).click();
     await shown(modal().getByText('已吊销', { exact: true }));
-    verify((await unauthenticated.request.get(endpoint)).status() === 404, '吊销后订阅仍可访问');
+    verify((await unauthenticated.request.get(replacement)).status() === 404, '吊销后订阅仍可访问');
     await close();
   } finally {
     await unauthenticated.close();
@@ -165,6 +194,8 @@ rules:
   await shown(page.getByRole('heading', { name: profile }));
 
   await page.setViewportSize({ width: 375, height: 812 });
+  await theme.click();
+  verify(await page.locator('html').getAttribute('data-theme') === 'dark', '手机端未应用深色皮肤');
   await field('选择模块').selectOption('proxy-groups');
   await shown(page.getByRole('heading', { name: '代理组' }));
   await button('YAML 预览').click();

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -202,14 +203,11 @@ func (s *Server) restoreVersion(w http.ResponseWriter, r *http.Request, user ses
 	return nil
 }
 
-func linkPurpose(id string) string { return "link:" + id + ":token" }
-
 func (s *Server) insertLink(ctx context.Context, tx *sql.Tx, profile, label string) (Link, error) {
 	link := Link{ID: randomToken(18), Label: label, CreatedAt: time.Now().UTC().Truncate(time.Millisecond)}
-	token := randomToken(32)
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO subscription_links(id, profile_id, label, token_digest, token, created_at)
-		VALUES(?, ?, ?, ?, ?, ?)`, link.ID, profile, link.Label, digest(token), s.seal(token, linkPurpose(link.ID)), link.CreatedAt.UnixMilli())
+		INSERT INTO subscription_links(id, profile_id, label, created_at)
+		VALUES(?, ?, ?, ?)`, link.ID, profile, link.Label, link.CreatedAt.UnixMilli())
 	return link, err
 }
 
@@ -285,13 +283,13 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request, user session
 }
 
 func (s *Server) getLinkURL(w http.ResponseWriter, r *http.Request, user sessionUser) error {
-	id := r.PathValue("link")
-	ctx := r.Context()
+	id, profileID := r.PathValue("link"), r.PathValue("profile")
 	var sealed []byte
-	err := s.db.QueryRowContext(ctx, `
-		SELECT l.token FROM subscription_links l JOIN profiles p ON p.id = l.profile_id
+	err := s.db.QueryRowContext(r.Context(), `
+		SELECT k.sealed_key FROM subscription_links l JOIN profiles p ON p.id = l.profile_id
+		JOIN profile_subscription_keys k ON k.profile_id = p.id
 		WHERE p.owner_id = ? AND p.id = ? AND l.id = ? AND l.revoked_at IS NULL AND p.published_version_id IS NOT NULL`,
-		user.ID, r.PathValue("profile"), id,
+		user.ID, profileID, id,
 	).Scan(&sealed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return notFound()
@@ -299,7 +297,7 @@ func (s *Server) getLinkURL(w http.ResponseWriter, r *http.Request, user session
 	if err != nil {
 		return err
 	}
-	token, err := s.unseal(sealed, linkPurpose(id))
+	key, err := s.unseal(sealed, subscriptionKeyPurpose(profileID))
 	if err != nil {
 		return err
 	}
@@ -307,7 +305,8 @@ func (s *Server) getLinkURL(w http.ResponseWriter, r *http.Request, user session
 	if base == "" {
 		base = requestBase(r)
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"url": base + "/s/" + token + ".yaml"})
+	endpoint := base + "/s/" + id + ".yaml"
+	writeJSON(w, http.StatusOK, map[string]string{"endpoint": endpoint, "url": endpoint + "?key=" + url.QueryEscape(key)})
 	return nil
 }
 
@@ -331,8 +330,9 @@ func (s *Server) serveSubscription(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 		return
 	}
-	token, suffix := strings.CutSuffix(r.PathValue("filename"), ".yaml")
-	if !suffix || !validToken(token) {
+	id, suffix := strings.CutSuffix(r.PathValue("filename"), ".yaml")
+	key := requestSubscriptionKey(r)
+	if !suffix || len(id) != 24 || !validToken(key) {
 		http.NotFound(w, r)
 		return
 	}
@@ -342,7 +342,8 @@ func (s *Server) serveSubscription(w http.ResponseWriter, r *http.Request) {
 		SELECT v.id, v.content_sha256, v.yaml FROM subscription_links l
 		JOIN profiles p ON p.id = l.profile_id
 		JOIN profile_versions v ON v.id = p.published_version_id AND v.profile_id = p.id
-		WHERE l.token_digest = ? AND l.revoked_at IS NULL`, digest(token),
+		JOIN profile_subscription_keys k ON k.profile_id = p.id
+		WHERE l.id = ? AND k.key_digest = ? AND l.revoked_at IS NULL`, id, digest(key),
 	).Scan(&versionID, &hash, &sealed)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.NotFound(w, r)

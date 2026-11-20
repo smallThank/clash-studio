@@ -235,6 +235,10 @@ func (s *Server) insertProfile(ctx context.Context, tx *sql.Tx, owner string, me
 		INSERT INTO profiles(id, owner_id, name, target, draft_yaml, draft_rev, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?)`, profile.ID, owner, meta.Name, meta.Target,
 		s.seal(yaml, draftPurpose(profile.ID)), profile.DraftRev, now.UnixMilli())
+	if err != nil {
+		return profile, err
+	}
+	_, err = s.replaceSubscriptionKey(ctx, tx, profile.ID)
 	return profile, err
 }
 

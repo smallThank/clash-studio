@@ -58,7 +58,7 @@ OpenClash 的 INI 风格覆写模块与 Clash Verge Rev 的扩展 YAML / JavaScr
 | 常规与扩展 | 常规页覆盖样例全部 9 项。扩展页可编辑 `tun`、`sniffer`、`hosts`、`profile` 等 Mihomo YAML，并预览生效键。客户端可能接管的字段给出提示。 [常规配置][mh-general] · [TUN][mh-tun] · [Sniffer][mh-sniff] |
 | 规则集 | 配置 `http/file/inline`、`domain/ipcidr/classical`、`yaml/text/mrs`、`url/path/payload/interval/proxy`。按来源显示字段，`mrs` 只允许 `domain` 和 `ipcidr`。本地文件型规则集需在客户端随配置准备相应文件。 [规则 Provider][mh-rp] |
 | 路由规则 | 支持样例所有规则类型，以及 `DOMAIN-KEYWORD/IP-CIDR/IP-CIDR6`，其余类型可通过原始规则录入。支持调序、批量粘贴和查找；`MATCH` 提供移至末尾操作。 [规则语法][mh-rules] |
-| 预览、导出和发布 | 结构与引用校验、错误定位、差异预览；一键下载完整 YAML；主动发布版本；按配置创建多个只读订阅链接、复制与吊销。URL 返回 YAML 正文。 |
+| 预览、导出和发布 | 结构与引用校验、错误定位、差异预览；一键下载完整 YAML；主动发布版本；按配置管理独立密钥，可复制、轮换，支持创建和吊销设备订阅链接。只有提供正确密钥时，订阅接口才返回 YAML。 |
 
 首期支持额外字段的安全导入、保留与高级编辑。客户端覆写文件生成、执行扩展脚本、任意格式在线转换、代管规则资源和管理员后台作为后续功能候选。
 
