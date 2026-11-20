@@ -1,15 +1,17 @@
 async (page) => {
-  const fixture = `mode: Rule
+  const fixture = String.raw`mode: Rule
 mixed-port: 7890
 dns:
   enable: true
   nameserver: [1.1.1.1]
 profile:
-  emoji-fixture: "🚀 🎯 🐱"
+  emoji-fixture: "\U0001F680 \U0001F3AF \U0001F431"
 proxies:
   - {name: 测试中继, type: socks5, server: 192.0.2.25, port: 1080}
+  - {name: "\U0001F431 表情节点", type: socks5, server: 192.0.2.26, port: 1080}
 proxy-groups:
   - {name: 节点选择, type: select, proxies: [测试中继, DIRECT]}
+  - {name: "\U0001F3AF 表情分组", type: select, proxies: ["\U0001F431 表情节点", DIRECT]}
 rules:
   - DOMAIN,example.org,DIRECT
   - MATCH,节点选择
@@ -21,6 +23,7 @@ rules:
   const button = (name, scope = page) => scope.getByRole('button', { name, exact: typeof name === 'string' });
   const field = (name, scope = page) => scope.getByLabel(name, { exact: true });
   const preview = () => page.getByRole('region', { name: '生成的 YAML' });
+  const importPreview = () => field('导入 YAML 预览', modal());
   const verify = (value, message) => { if (!value) throw Error(message); };
   const shown = locator => locator.waitFor({ state: 'visible' });
   const section = name => button(new RegExp('^' + name + '(?:\\s|$)'), page.getByRole('navigation', { name: '配置模块' })).click();
@@ -38,27 +41,64 @@ rules:
   await button('注册并进入').click();
   await button('新建配置', page.getByRole('main')).click();
   await field('配置名称', modal()).fill(profile);
+  const probeRoute = '**/api/v1/imports/probe';
+  await page.route(probeRoute, route => route.fulfill({
+    json: { id: 'test-import', kind: 'config', host: 'upstream.example.invalid', yaml: fixture },
+  }));
+  await button('原始订阅地址', modal()).click();
+  await field('完整配置订阅地址', modal()).fill('https://upstream.example.invalid/config.yaml');
+  await button('预览导入', modal()).click();
+  await shown(importPreview().getByText(/🚀 🎯 🐱/u));
+  await page.unroute(probeRoute);
+
   await button('导入 YAML', modal()).click();
   await modal().locator('input[type=file]').setInputFiles({
     name: 'fixture.yaml', mimeType: 'application/yaml', buffer: Buffer.from(fixture),
   });
   await button('预览导入', modal()).click();
   await shown(modal().getByText('已读取 YAML', { exact: true }));
+  await shown(importPreview().getByText(/🚀 🎯 🐱/u));
   await finish('创建配置');
   await shown(page.getByRole('heading', { name: profile }));
   await shown(page.getByRole('heading', { name: '代理组' }));
   await shown(preview());
   await shown(preview().getByText(/🚀 🎯 🐱/u));
+  await shown(button('编辑🎯 表情分组'));
+  await button('编辑🎯 表情分组').click();
+  const emojiMember = modal().getByRole('group', { name: '显式成员' }).getByRole('checkbox', { name: '🐱 表情节点', exact: true });
+  verify(await emojiMember.isChecked(), '代理组成员未保留 emoji 节点引用');
+  await close();
+  await section('扩展配置');
+  verify((await field('扩展 YAML').inputValue()).includes('🚀 🎯 🐱'), '扩展 YAML 字段未显示 emoji');
   const theme = button('深色皮肤');
   await theme.click();
   verify(await theme.getAttribute('aria-pressed') === 'true', '深色皮肤切换失败');
+  const profilesRoute = '**/api/v1/profiles?offset=0';
+  await page.route(profilesRoute, async route => {
+    const response = await route.fetch();
+    const list = await response.json();
+    await route.fulfill({ response, json: { ...list, profiles: list.profiles.map(item => ({ ...item, hasSource: true })) } });
+  });
   await page.reload();
   await shown(theme);
+  await page.unroute(profilesRoute);
   verify(await theme.getAttribute('aria-pressed') === 'true', '刷新后没有保留主题');
   verify(await page.locator('html').getAttribute('data-theme') === 'dark', '页面没有应用深色皮肤');
   await theme.click();
   verify(await theme.getAttribute('aria-pressed') === 'false', '浅色皮肤切换失败');
   verify((await preview().innerText()).includes('mode: Rule'), '文件导入应保留模式的原始写法');
+
+  const refreshRoute = '**/api/v1/profiles/*/imports/refresh';
+  await page.route(refreshRoute, route => route.fulfill({
+    json: { id: 'test-refresh', draftRev: 1, conflicts: [], yaml: fixture.replace('\\U0001F680', '\\U0001F389') },
+  }));
+  await button('配置管理').click();
+  await button('刷新原始订阅', modal()).click();
+  await modal().getByText('profile', { exact: true }).click();
+  await shown(field('当前草稿', modal()).getByText(/🚀 🎯 🐱/u));
+  await shown(field('上游更新预览', modal()).getByText(/🎉 🎯 🐱/u));
+  await close();
+  await page.unroute(refreshRoute);
 
   await section('常规设置');
   await field('混合端口').fill('7897');
@@ -168,6 +208,16 @@ rules:
     await field('混合端口').fill('7898');
     await button('保存草稿').click();
     await shown(preview().getByText('mixed-port: 7898', { exact: true }));
+    await section('扩展配置');
+    const advanced = field('扩展 YAML');
+    await advanced.fill((await advanced.inputValue()).replace('🚀 🎯 🐱', '🎉 🎯 🐱'));
+    await button('保存草稿').click();
+    await shown(preview().getByText(/🎉 🎯 🐱/u));
+    await button('比较草稿与已发布版本').click();
+    await modal().getByText('profile', { exact: true }).click();
+    await shown(field('已发布 v1', modal()).getByText(/🚀 🎯 🐱/u));
+    await shown(field('当前草稿', modal()).getByText(/🎉 🎯 🐱/u));
+    await close();
     verify((await (await unauthenticated.request.get(endpoint)).text()) === firstYAML, '保存草稿影响了已发布订阅');
     await button('发布订阅').click();
     await button('确认发布', modal()).click();
@@ -223,5 +273,5 @@ rules:
   await button('登录').click();
   await shown(page.getByRole('heading', { name: profile }));
   verify(browserErrors.length === 0, browserErrors.join('\n'));
-  return '桌面和 375px 手机端的编辑、文件导入、真实订阅、账户与持久化流程通过';
+  return '桌面和 375px 手机端流程通过，覆盖导入与对比预览中的 emoji，以及真实订阅、账户和持久化';
 }

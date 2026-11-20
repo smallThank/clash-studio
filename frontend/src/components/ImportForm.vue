@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { api } from '../api.ts';
 import { targets } from '../config.ts';
 import type { Probe, Target } from '../api.ts';
+import { yamlPreviewText } from '../yaml-preview.ts';
 
 const mode = ref<'blank' | 'file' | 'url'>('blank');
 const name = ref('');
@@ -11,6 +12,7 @@ const file = ref<File>();
 const url = ref('');
 const userAgent = ref('');
 const result = ref<Probe | null>(null);
+const previewYAML = computed(() => yamlPreviewText(result.value?.yaml ?? ''));
 const busy = ref(false);
 const error = ref('');
 
@@ -86,7 +88,7 @@ defineExpose({ data });
       <div v-if="result" class="import-result">
         <p>已读取 YAML{{ result.host ? ' · ' + result.host : '' }}</p>
         <p v-if="result.issues?.length" class="muted">发现 {{ result.issues.length }} 条校验结果，可创建草稿后查看和修复。</p>
-        <pre v-if="result.yaml" tabindex="0" aria-label="导入 YAML 预览">{{ result.yaml }}</pre>
+        <pre v-if="previewYAML" tabindex="0" aria-label="导入 YAML 预览">{{ previewYAML }}</pre>
       </div>
     </div>
   </div>

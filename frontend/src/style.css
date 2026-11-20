@@ -38,7 +38,12 @@
 
 .auth-theme { position: absolute; top: 18px; right: 18px; }
 .subscription-endpoint { margin-top: 12px; }
-:root { color-scheme: light; color: var(--ink); background: var(--page); }
+:root {
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", monospace;
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--page);
+}
 :root[data-theme="dark"] {
   color-scheme: dark;
   --page: #18191a;
