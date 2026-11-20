@@ -53,7 +53,7 @@ function toggle(option: string) {
     </label>
     <div class="refs">
       <label v-for="option in referenceOptions" :key="option" class="check-option">
-        <input type="checkbox" :checked="selected.includes(option)" @change="toggle(option)" />{{ option }}
+        <input type="checkbox" :checked="selected.includes(option)" @change="toggle(option)" /><span>{{ option }}</span>
       </label>
       <span v-if="!referenceOptions.length" class="muted">{{ filter ? '没有匹配的结果' : '暂无可选条目' }}</span>
     </div>

@@ -1,0 +1,158 @@
+body { min-inline-size: 0; }
+
+.page, .workspace, .editor, .preview, .listing, .dialog-head h2, .dialog-body, .manager-commands, .diff-grid > div { min-inline-size: 0; }
+
+.topbar {
+  height: auto;
+  min-block-size: 4.125rem;
+  padding-block: .5rem;
+  flex-wrap: wrap;
+}
+.top-context { flex: 1 1 8rem; font-size: .875rem; }
+.top-actions, .banner-actions, .editor-actions {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.top-actions { margin-inline-start: auto; }
+
+.btn, .icon-btn {
+  height: auto;
+  min-block-size: 2.5rem;
+  font-size: .875rem;
+  line-height: 1.25;
+}
+.btn { padding-block: .4375rem; }
+.btn > span { min-inline-size: 0; overflow-wrap: anywhere; }
+.icon-btn { flex: 0 0 auto; }
+.pagination .btn { min-block-size: 2rem; height: auto; }
+
+.profile-banner { flex-wrap: wrap; align-items: flex-start; }
+.profile-title { flex: 1 1 15rem; }
+.profile-title h1 { font-size: clamp(1.625rem, 1.15rem + 1.1vw, 2.25rem); line-height: 1.2; letter-spacing: -.03em; }
+.profile-meta { font-size: .8125rem; line-height: 1.5; }
+.banner-actions { margin-inline-start: auto; align-self: center; }
+.banner-actions .btn { font-size: .8125rem; }
+
+.editor { container: editor / inline-size; }
+.editor-heading h2 { font-size: 1.4375rem; }
+.editor-heading p { font-size: .875rem; }
+.editor-tools { align-items: center; flex-wrap: wrap; }
+.editor-tools > .search { flex: 1 1 11rem; max-inline-size: 15rem; }
+.editor-actions { margin-inline-start: auto; }
+.search { height: auto; min-block-size: 2.5rem; }
+.search input { font-size: .875rem; }
+.editor-foot { font-size: .8125rem; line-height: 1.45; }
+
+.listing {
+  --columns: minmax(0, 1.1fr) minmax(0, .75fr) minmax(0, 1.6fr) 2.5rem;
+}
+.listing.rules-list {
+  --columns: minmax(0, .8fr) minmax(0, .85fr) minmax(0, 1.4fr) 7.5rem;
+}
+.listing .listing-head, .listing .listing-row {
+  grid-template-columns: var(--columns);
+  gap: .5rem;
+}
+.listing-head, .listing-row { overflow-wrap: anywhere; }
+.listing-head { font-size: .75rem; }
+.listing-row { font-size: .875rem; padding-block: .625rem; }
+.listing-row > *, .row-name > span:last-child, .member-chip > span { min-inline-size: 0; }
+.listing-detail { align-self: center; }
+.row-description { font-size: .8125rem; }
+.type-chip, .member-chip, .extra-count { font-size: .75rem; }
+.member-chip { max-inline-size: 100%; }
+.operation-heading { min-inline-size: 0; text-align: end; }
+.row-actions .icon-btn { min-inline-size: 2.5rem; }
+
+@container editor (max-width: 32rem) {
+  .listing-head { display: none; }
+  .listing .listing-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name actions" "type actions" "detail detail";
+    row-gap: .25rem;
+    justify-items: start;
+  }
+  .listing-row .row-name { grid-area: name; }
+  .listing-row .row-type { grid-area: type; }
+  .listing-row .listing-detail { grid-area: detail; padding: .125rem 0 0; }
+  .listing-row .row-actions { grid-area: actions; justify-self: end; }
+}
+
+.preview-header, .preview-tools, .preview-footer { gap: .5rem; flex-wrap: wrap; padding-block: .25rem; }
+.preview-actions { margin-inline-start: auto; }
+.preview-title h2 { font-size: 1rem; }
+.preview-tabs { flex-wrap: wrap; gap: .75rem; }
+.preview-tabs button { min-block-size: 2.5rem; font-size: .8125rem; }
+.line-count, .check-text { font-size: .8125rem; }
+.check-text { text-align: start; }
+.preview .code-window { block-size: clamp(10rem, 50dvh, 30rem); min-block-size: 0; }
+.code-line { font-size: .8125rem; line-height: 1.7; }
+.line-no { width: 3.25em; padding-inline-end: .75em; }
+
+dialog[open] {
+  inline-size: min(38rem, calc(100% - 1.5rem));
+  max-block-size: calc(100dvh - 1.5rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dialog-head { flex: none; }
+.dialog-head h2 { font-size: 1.25rem; line-height: 1.35; overflow-wrap: anywhere; }
+#dialog-form {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-block-size: 0;
+}
+.dialog-body { overflow: auto; overscroll-behavior: contain; }
+.dialog-actions { min-inline-size: 0; }
+.dialog-actions .btn { white-space: normal; overflow-wrap: anywhere; }
+.dialog-spacer { min-inline-size: 0; }
+.field, .dialog-body p { font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; }
+.field label, .field legend { max-inline-size: 100%; overflow-wrap: anywhere; }
+.field small { font-size: .8125rem; }
+.field input:not([type="checkbox"]), .field textarea, .field select, .mobile-controls select {
+  min-inline-size: 0;
+  min-block-size: 2.5rem;
+  max-inline-size: 100%;
+  line-height: 1.4;
+}
+.check-option { max-inline-size: 100%; min-inline-size: 0; font-size: .8125rem; }
+.check-option span { min-inline-size: 0; overflow-wrap: anywhere; }
+.check-option input { flex: 0 0 auto; margin: .25rem; }
+.sensitive-field > .btn { align-self: stretch; }
+.diff-detail summary, .link-item, #toast { overflow-wrap: anywhere; }
+.link-item strong, .link-item > .muted { min-inline-size: 0; font-size: .8125rem; }
+.link-item > .muted { align-self: center; }
+.mobile-tabs { flex-wrap: wrap; }
+
+@media (max-width: 780px) {
+  .topbar { min-block-size: 3.6875rem; }
+  .top-context { flex-basis: 4.5rem; }
+  .btn, .icon-btn, .search { min-block-size: 2.75rem; }
+  .icon-btn, .row-actions .icon-btn { min-inline-size: 2.75rem; }
+  .mobile-controls select, .field input:not([type="checkbox"]), .field textarea, .field select, .search input { font-size: 1rem; }
+  .mobile-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; }
+  .editor-tools > .search { max-inline-size: none; }
+  .profile-title { flex-basis: 12rem; }
+  .profile-title h1 { font-size: clamp(1.5rem, 1.15rem + 1.3vw, 1.875rem); }
+  .profile-banner { gap: .5rem; }
+  .pagination .btn { min-block-size: 2.75rem; }
+}
+
+@media (max-width: 480px) {
+  .form-grid { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+  .dialog-head, .dialog-body, .dialog-actions { padding-inline: .75rem; }
+  .link-item > .muted { grid-column: 1 / -1; }
+  .link-item { grid-template-columns: repeat(2, minmax(0, max-content)); }
+  .link-item .btn { white-space: normal; }
+  .auth-page { padding-block-start: 4.5rem; }
+}
+
+@media (max-height: 24rem) {
+  dialog[open] { overflow: auto; }
+  #dialog-form { display: block; }
+  .dialog-body { overflow: visible; }
+}

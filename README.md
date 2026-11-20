@@ -121,6 +121,9 @@ npm --prefix frontend run build
 playwright-cli open http://127.0.0.1:8080
 playwright-cli run-code --filename=tests/browser-workflow.mjs
 playwright-cli close
+playwright-cli open http://127.0.0.1:8080
+playwright-cli run-code --filename=tests/browser-layout.mjs
+playwright-cli close
 ```
 
 [需求分析](docs/requirements.md) · [技术设计](docs/technical-design.md) · [交互原型](prototype/README.md)

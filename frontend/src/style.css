@@ -35,8 +35,6 @@
 @media (max-width: 780px) {
   .empty-account { display: inline-flex; }
   .diff-grid { grid-template-columns: 1fr; }
-  .listing-head.rules-list { grid-template-columns: minmax(0, .85fr) minmax(0, 1.05fr) auto; }
-  .listing-head.rules-list span:nth-child(3) { display: none; }
   .reference-order .icon-btn { min-width: 32px; min-height: 36px; }
 }
 

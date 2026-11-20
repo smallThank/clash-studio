@@ -106,9 +106,9 @@ defineExpose({ focusRow });
           <button type="button" class="btn primary" :disabled="busy" @click="emit('add', entity)"><Icon name="plus" :size="17" />{{ current.add }}</button>
         </div>
       </div>
-      <div class="listing">
+      <div class="listing" :class="{ 'rules-list': entity === 'rules' }">
         <template v-if="visible.length">
-          <div class="listing-head" :class="{ 'rules-list': entity === 'rules' }">
+          <div class="listing-head">
             <span>{{ entity === 'rules' ? '顺序' : '名称' }}</span><span>类型</span>
             <span>{{ entity === 'proxy-groups' ? '成员 / 来源' : entity === 'rules' ? '匹配内容与目标' : '来源 / 详情' }}</span>
             <span class="operation-heading">操作</span>
@@ -119,12 +119,12 @@ defineExpose({ focusRow });
               <span v-else class="row-glyph"><Icon :name="current.icon" :size="16" /></span>
               <span>{{ row.label }}</span>
             </div>
-            <div><span class="type-chip" :class="row.kind">{{ row.chip }}</span></div>
+            <div class="row-type"><span class="type-chip" :class="row.kind">{{ row.chip }}</span></div>
             <div class="listing-detail">
               <template v-if="entity === 'proxy-groups'">
                 <div v-if="row.tags.length" class="members">
                   <span v-for="({ item, kind }, index) in row.tags.slice(0, 3)" :key="index" class="member-chip" :class="kind">
-                    <Icon v-if="kind === 'source'" name="rss" :size="12" />{{ item }}
+                    <Icon v-if="kind === 'source'" name="rss" :size="12" /><span>{{ item }}</span>
                   </span>
                   <span v-if="row.tags.length > 3" class="extra-count">+{{ row.tags.length - 3 }}</span>
                 </div>
@@ -144,7 +144,7 @@ defineExpose({ focusRow });
             </div>
             <div class="row-actions">
               <template v-if="entity === 'rules'">
-                <button class="icon-btn" type="button" data-action="move-up" :aria-label="'上移' + row.label"
+                <button class="icon-btn" type="button" :aria-label="'上移' + row.label"
                   :disabled="busy || row.index === 0" @click="emit('move', row.index, row.index - 1)"><Icon name="arrowup" :size="16" /></button>
                 <button class="icon-btn" type="button" :aria-label="'下移' + row.label" :disabled="busy || row.index === rows.length - 1"
                   @click="emit('move', row.index, row.index + 1)"><Icon name="arrowdown" :size="16" /></button>
