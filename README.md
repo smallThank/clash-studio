@@ -2,6 +2,25 @@
 
 通过网页管理多份 OpenClash 和 Clash Verge Rev 配置，编辑节点、代理组、DNS 和分流规则，下载 YAML 或发布可更新的订阅。
 
+## Docker 部署
+
+在项目根目录构建并启动镜像。一个容器同时提供前端、管理 API 和订阅接口，容器内统一使用 8080 端口。
+
+```sh
+docker build -t clash-studio:local .
+docker run -d --name clash-studio --restart unless-stopped \
+  -p 127.0.0.1:8080:8080 \
+  -e PUBLIC_BASE_URL=http://127.0.0.1:8080 \
+  --mount type=volume,source=clash-studio-data,target=/data \
+  clash-studio:local
+```
+
+浏览器打开 <http://127.0.0.1:8080>。可访问 <http://127.0.0.1:8080/healthz> 检查服务。
+
+- **跨设备订阅**。把 `PUBLIC_BASE_URL` 设为 OpenClash 和 Clash Verge Rev 在代理尚未启动时也能访问的地址。使用宿主机 HTTPS 反向代理时，保留上面的本机端口绑定，并将变量设为对外的 HTTPS 域名。若需要容器端口直接对外提供 HTTP，可用 `-p 8080:8080`，并将变量设为对应的访问地址。
+- **数据保留**。命名卷 `clash-studio-data` 保存 SQLite 和自动生成的 `master.key`。更新镜像后重建容器时挂载同一卷。停容器备份时保留卷内数据库和密钥。若使用 `CLASH_MASTER_KEY` 注入密钥，另行保管同一个值。若改用宿主机目录挂载，请让该目录可由 UID/GID `10001:10001` 写入。
+- **镜像架构**。直接在部署服务器构建可获得对应架构的镜像。从 Apple Silicon 将镜像搬到 x86-64 服务器时，构建命令使用 `docker buildx build --platform linux/amd64 --load -t clash-studio:local .`，再用 `docker save` 和 `docker load` 转移。
+
 ## 本地运行
 
 需要 Go 1.23+、支持 CGO 的 C 编译器，以及 Node.js 22.15+。
