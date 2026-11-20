@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net/http"
@@ -30,6 +31,21 @@ func TestParseImportFormats(t *testing.T) {
 		_, err := ParseImport(test.input, test.mode)
 		if (err == nil) != test.valid {
 			t.Errorf("ParseImport(%q, %q) = %v, valid %t", test.input, test.mode, err, test.valid)
+		}
+	}
+}
+
+func TestParseImportReportsEncryptedAndEncodedResponses(t *testing.T) {
+	armor := "\ufeff-----BEGIN AGE ENCRYPTED FILE-----\nfixture\n-----END AGE ENCRYPTED FILE-----"
+	for _, test := range []struct{ mode, body, want string }{
+		{"provider", armor, "age-secret-key"},
+		{"config", armor, "本地解密"},
+		{"provider", "ss://synthetic-placeholder", "节点链接列表"},
+		{"provider", base64.StdEncoding.EncodeToString([]byte("vmess://synthetic-placeholder")), "Base64 编码"},
+		{"provider", "unrecognized-ciphertext", "确认服务商使用的加密格式"},
+	} {
+		if _, err := ParseImport(test.body, test.mode); err == nil || !strings.Contains(err.Error(), test.want) || strings.Contains(err.Error(), "synthetic-placeholder") {
+			t.Errorf("%s response did not report %q safely: %v", test.mode, test.want, err)
 		}
 	}
 }
@@ -130,7 +146,10 @@ func TestFetchYAMLResponseLimitsAndCredentialRedaction(t *testing.T) {
 		want                    string
 	}{
 		{name: "ok", code: 200, body: "rules: ['MATCH,DIRECT']", contentType: "text/plain"},
+		{name: "YAML incorrectly labeled HTML", code: 200, body: "proxies: []", contentType: "text/html; charset=utf-8"},
+		{name: "AGE incorrectly labeled HTML", code: 200, body: "-----BEGIN AGE ENCRYPTED FILE-----\nfixture", contentType: "text/html"},
 		{name: "html", code: 200, body: "<html>placeholder</html>", contentType: "text/html; charset=utf-8", want: "网页"},
+		{name: "HTML mislabeled as text", code: 200, body: "\ufeff\n<!DOCTYPE html><html>login</html>", contentType: "text/plain", want: "User-Agent"},
 		{name: "size", code: 200, body: strings.Repeat("Y", MaxYAMLBytes+1), want: "超过"},
 		{name: "http status", code: 404, body: "token-placeholder", want: "404"},
 		{name: "transport", transportError: errors.New("token-placeholder"), want: "无法连接"},

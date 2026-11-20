@@ -104,6 +104,8 @@ curl -fsS -H "Authorization: Bearer $CLASH_SUBSCRIPTION_KEY" \
 
 检查或导入上游订阅时，如果容器 DNS 返回 OpenClash 常用的 Fake-IP 网段（`198.18.0.0/15`），应用会通过 Cloudflare 的加密 DNS 查询订阅域名，再连接通过公网地址检查的结果。DNS 查询只包含域名。若容器无法访问 `https://1.1.1.1/dns-query`，可在 OpenClash 的 Fake-IP 过滤列表加入订阅域名，让容器直接解析到公网地址。
 
+网页检查会读取响应正文识别订阅格式。若收到网页，请在「请求 User-Agent」填入服务商要求的值重试。该值仅用于本次检查。如果服务商使用 AGE 加密节点源，可在「其他字段（YAML）」配置 `age-secret-key`，由支持 AGE 的 Mihomo 客户端拉取并解密。若服务商提供的地址返回整份配置，请从客户端导出解密后的 YAML，再通过「新建配置 → 导入 YAML」导入。 [Mihomo 节点源文档](https://wiki.metacubex.one/config/proxy-providers/#age-secret-key)
+
 ## 测试
 
 ```sh

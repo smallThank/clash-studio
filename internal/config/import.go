@@ -1,8 +1,10 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -68,15 +70,16 @@ func fetchYAML(client *http.Client, request *http.Request) (string, error) {
 	if response.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("上游返回 HTTP %d", response.StatusCode)
 	}
-	if kind := strings.ToLower(response.Header.Get("Content-Type")); strings.Contains(kind, "text/html") || strings.Contains(kind, "application/xhtml+xml") {
-		return "", errors.New("上游返回网页，请提供 Clash/Mihomo YAML 订阅地址")
-	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, MaxYAMLBytes+1))
 	if err != nil {
 		return "", errors.New("读取上游 YAML 失败")
 	}
 	if len(data) > MaxYAMLBytes {
 		return "", errors.New("上游 YAML 大小超过 2 MiB")
+	}
+	body := bytes.TrimSpace(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")))
+	if http.DetectContentType(body) == "text/html; charset=utf-8" || bytes.HasPrefix(bytes.ToLower(body[:min(len(body), 512)]), []byte("<html")) {
+		return "", errors.New("上游为当前请求返回了网页。若客户端可以导入，请在「请求 User-Agent」填入服务商要求的值后重试")
 	}
 	return string(data), nil
 }
@@ -217,9 +220,24 @@ func ParseImport(source, mode string) (*Document, error) {
 	if mode != "config" && mode != "provider" {
 		return nil, errors.New("请选择完整配置或节点订阅")
 	}
+	body := strings.TrimSpace(strings.TrimPrefix(source, "\ufeff"))
+	if strings.HasPrefix(body, "-----BEGIN AGE ENCRYPTED FILE-----") {
+		if mode == "provider" {
+			return nil, errors.New("已识别到 AGE 加密订阅。请在其他字段（YAML）配置 age-secret-key，保存后由支持 AGE 的客户端拉取并验证")
+		}
+		return nil, errors.New("已识别到 AGE 加密配置。请先在本地解密为 YAML，再上传导入")
+	}
 	doc, err := Parse(source)
 	if err != nil {
-		return nil, errors.New("无法读取订阅，请提供格式正确的 Clash/Mihomo YAML")
+		if containsNodeURI(body) {
+			return nil, errors.New("上游返回的是节点链接列表。请选用服务商提供的 Clash/Mihomo YAML 订阅地址")
+		}
+		for _, encoding := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+			if decoded, decodeErr := encoding.DecodeString(body); decodeErr == nil && containsNodeURI(string(decoded)) {
+				return nil, errors.New("上游返回的是 Base64 编码的节点链接列表。请选用服务商提供的 Clash/Mihomo YAML 订阅地址")
+			}
+		}
+		return nil, errors.New("上游响应无法识别为 Clash/Mihomo YAML。请检查请求 User-Agent，或确认服务商使用的加密格式")
 	}
 	if mode == "provider" {
 		nodes := sequence(mappingValue(doc.root, "proxies"))
@@ -243,4 +261,20 @@ func ParseImport(source, mode string) (*Document, error) {
 		}
 	}
 	return nil, errors.New("订阅里没有识别到 Clash/Mihomo 配置字段")
+}
+
+func containsNodeURI(body string) bool {
+	first, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
+	if strings.IndexAny(first, " \t\r") >= 0 {
+		return false
+	}
+	scheme, rest, ok := strings.Cut(first, "://")
+	if !ok || strings.TrimSpace(rest) == "" {
+		return false
+	}
+	switch strings.ToLower(scheme) {
+	case "ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "hy2", "tuic", "socks", "socks5":
+		return true
+	}
+	return false
 }
