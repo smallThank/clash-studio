@@ -86,6 +86,8 @@ go run ./cmd/clash-studio
 
 编辑「手动选择」代理组，在「默认节点」选择显式成员。要使用订阅节点，先勾选该组的订阅源，首次点击「读取订阅节点」并选中目标。成功读取的节点名单保存在服务端，再次编辑时直接显示。需要同步上游变化时，点击「刷新节点名单」。也可以直接填写客户端显示的完整节点名。
 
+读取名单时，后台优先使用订阅源的 `header.User-Agent`，其次是配置的 `global-ua`，默认发送 `clash.meta/1.19.34`。如果服务商要求特定标识，可在订阅源的「其他字段（YAML）」配置 `header.User-Agent` 并重试。若上游返回的是通过 `proxy-providers` 引用节点的完整配置，请使用其中对应的节点订阅地址读取名单。
+
 保存后会写入 `default-selected`，由 Mihomo v1.19.28 及更新版本读取。旧内核可把目标节点移到「显式成员」的第一位。客户端保存的历史选择可能优先。 [Mihomo 字段说明](https://wiki.metacubex.one/config/proxy-groups/#default-selected) · [v1.19.28 发布记录](https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.28)
 
 ## 主题与订阅密钥

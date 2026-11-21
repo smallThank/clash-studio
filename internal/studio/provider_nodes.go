@@ -40,7 +40,7 @@ func (s *Server) providerNodes(w http.ResponseWriter, r *http.Request, user sess
 			return throttled()
 		}
 		startedAt := time.Now().UnixNano()
-		rawYAML, err := s.fetch(ctx, source.URL, source.UserAgent)
+		rawYAML, err := s.fetchNodeSubscription(ctx, source)
 		if err != nil {
 			return err
 		}

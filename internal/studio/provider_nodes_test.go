@@ -10,6 +10,26 @@ import (
 	"testing"
 )
 
+func TestProviderNodeLookupUsesMihomoUserAgentByDefault(t *testing.T) {
+	handler, _ := testOpen(t, filepath.Join(t.TempDir(), "studio.db"), Options{
+		Fetch: func(_ context.Context, _, agent string) (string, error) {
+			if agent == "clash.meta/1.19.34" {
+				return "proxies: [{name: 'Node', type: socks5}]", nil
+			}
+			return "message: unsupported client", nil
+		},
+	})
+	client := registerClient(t, handler, "DefaultProviderAgent")
+	const url = "https://subscription.example.invalid/nodes"
+	rec := client.request(handler, http.MethodPost, apiPrefix+"/imports/provider-nodes",
+		providerNodesRequest{URL: url, Refresh: true}, nil)
+	expect(t, rec, http.StatusOK)
+	if names := decode[providerNodesResponse](t, rec).Nodes; !slices.Equal(names, []string{"Node"}) {
+		t.Fatalf("default User-Agent did not get a node list: %v", names)
+	}
+	expect(t, client.request(handler, http.MethodPost, apiPrefix+"/imports/probe", probeRequest{Mode: "provider", URL: url}, nil), http.StatusOK)
+}
+
 func TestProviderNodeCachePersistsAndRefreshesExplicitly(t *testing.T) {
 	filename := filepath.Join(t.TempDir(), "studio.db")
 	source := providerNodesRequest{URL: "https://subscription.example.invalid/nodes?token=private", UserAgent: "Mihomo-Test"}

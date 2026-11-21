@@ -74,8 +74,11 @@ async function readNodes(refresh: boolean) {
     if (typeof entry.url !== 'string' || !entry.url.trim()) throw new Error('请先填写该订阅源的地址。');
     const header = isRecord(entry.header) ? entry.header : {};
     const agent = Object.entries(header).find(([name]) => name.toLowerCase() === 'user-agent')?.[1];
-    const userAgent = Array.isArray(agent) ? agent[0] : agent;
-    const result = await api.providerNodes({ url: entry.url, userAgent: typeof userAgent === 'string' ? userAgent : undefined, refresh });
+    const providerAgent = Array.isArray(agent) ? agent[0] : agent;
+    const globalAgent = props.config['global-ua'];
+    const userAgent = typeof providerAgent === 'string' && providerAgent.trim()
+      ? providerAgent : typeof globalAgent === 'string' ? globalAgent : undefined;
+    const result = await api.providerNodes({ url: entry.url, userAgent, refresh });
     if (currentRequest === requestID) cached.value = result;
   } catch (cause) {
     if (currentRequest === requestID) error.value = cause instanceof Error ? cause.message : '读取订阅节点失败。';

@@ -15,6 +15,7 @@ import (
 )
 
 const stageLifetime = 15 * time.Minute
+const defaultNodeSubscriptionUA = "clash.meta/1.19.34"
 
 type sourceConfig struct {
 	URL       string
@@ -59,6 +60,13 @@ func subscriptionSource(rawURL, userAgent string) (sourceConfig, string, error) 
 }
 
 type fetchFunc func(context.Context, string, string) (string, error)
+
+func (s *Server) fetchNodeSubscription(ctx context.Context, source sourceConfig) (string, error) {
+	if source.UserAgent == "" {
+		source.UserAgent = defaultNodeSubscriptionUA
+	}
+	return s.fetch(ctx, source.URL, source.UserAgent)
+}
 
 func importFetcher(injected fetchFunc) fetchFunc {
 	network := (&config.Fetcher{}).Fetch
@@ -106,7 +114,11 @@ func (s *Server) probeImport(w http.ResponseWriter, r *http.Request, user sessio
 		if err != nil {
 			return err
 		}
-		rawYAML, err = s.fetch(ctx, source.URL, source.UserAgent)
+		if req.Mode == "config" {
+			rawYAML, err = s.fetch(ctx, source.URL, source.UserAgent)
+		} else {
+			rawYAML, err = s.fetchNodeSubscription(ctx, source)
+		}
 		if err != nil {
 			return err
 		}

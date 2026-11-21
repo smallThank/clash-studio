@@ -39,13 +39,33 @@ func TestParseImportReportsEncryptedAndEncodedResponses(t *testing.T) {
 	armor := "\ufeff-----BEGIN AGE ENCRYPTED FILE-----\nfixture\n-----END AGE ENCRYPTED FILE-----"
 	for _, test := range []struct{ mode, body, want string }{
 		{"provider", armor, "age-secret-key"},
+		{"nodes", "age-encryption.org/v1\nfixture", "AGE 加密"},
 		{"config", armor, "本地解密"},
 		{"provider", "ss://synthetic-placeholder", "节点链接列表"},
+		{"nodes", "anytls://synthetic-placeholder", "节点链接列表"},
 		{"provider", base64.StdEncoding.EncodeToString([]byte("vmess://synthetic-placeholder")), "Base64 编码"},
 		{"provider", "unrecognized-ciphertext", "确认服务商使用的加密格式"},
 	} {
 		if _, err := ParseImport(test.body, test.mode); err == nil || !strings.Contains(err.Error(), test.want) || strings.Contains(err.Error(), "synthetic-placeholder") {
 			t.Errorf("%s response did not report %q safely: %v", test.mode, test.want, err)
+		}
+	}
+}
+
+func TestNodeImportExplainsMissingProxies(t *testing.T) {
+	for _, test := range []struct{ body, want string }{
+		{"proxy-providers: {Feed: {type: http}}", "通过 proxy-providers 引用节点"},
+		{"proxies: []\nproxy-providers: {Feed: {type: http}}", "通过 proxy-providers 引用节点"},
+		{"proxies: []", "列表为空"},
+		{"proxies: null", "列表为空"},
+		{"proxies: {Node: {type: direct}}", "字段需要是节点列表"},
+		{`{"message":"synthetic-placeholder"}`, "没有顶层 proxies"},
+	} {
+		for _, mode := range []string{"provider", "nodes"} {
+			_, err := ParseImport(test.body, mode)
+			if err == nil || !strings.Contains(err.Error(), test.want) || strings.Contains(err.Error(), "synthetic-placeholder") {
+				t.Errorf("%s response did not report %q safely: %v", mode, test.want, err)
+			}
 		}
 	}
 }

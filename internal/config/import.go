@@ -79,7 +79,7 @@ func fetchYAML(client *http.Client, request *http.Request) (string, error) {
 	}
 	body := bytes.TrimSpace(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")))
 	if http.DetectContentType(body) == "text/html; charset=utf-8" || bytes.HasPrefix(bytes.ToLower(body[:min(len(body), 512)]), []byte("<html")) {
-		return "", errors.New("上游为当前请求返回了网页。若客户端可以导入，请在「请求 User-Agent」填入服务商要求的值后重试")
+		return "", errors.New("上游为当前请求返回了网页。请检查订阅权限和服务商要求的 User-Agent")
 	}
 	return string(data), nil
 }
@@ -221,7 +221,7 @@ func ParseImport(source, mode string) (*Document, error) {
 		return nil, errors.New("请选择完整配置或节点订阅")
 	}
 	body := strings.TrimSpace(strings.TrimPrefix(source, "\ufeff"))
-	if strings.HasPrefix(body, "-----BEGIN AGE ENCRYPTED FILE-----") {
+	if strings.HasPrefix(body, "-----BEGIN AGE ENCRYPTED FILE-----") || strings.HasPrefix(body, "age-encryption.org/v1\n") {
 		if mode == "provider" {
 			return nil, errors.New("已识别到 AGE 加密订阅。请在其他字段（YAML）配置 age-secret-key，保存后由支持 AGE 的客户端拉取并验证")
 		}
@@ -244,9 +244,19 @@ func ParseImport(source, mode string) (*Document, error) {
 	}
 	if mode == "provider" || mode == "nodes" {
 		proxies := mappingValue(doc.root, "proxies")
+		if proxies != nil && proxies.Kind != yaml.SequenceNode && proxies.ShortTag() != "!!null" {
+			return nil, errors.New("上游响应中的 proxies 字段需要是节点列表")
+		}
 		nodes := sequence(proxies)
 		if len(nodes) == 0 {
-			return nil, errors.New("节点订阅需包含非空 proxies 列表")
+			if providers := mappingValue(doc.root, "proxy-providers"); providers != nil &&
+				providers.Kind == yaml.MappingNode && len(providers.Content) > 0 {
+				return nil, errors.New("上游返回的配置通过 proxy-providers 引用节点。请使用其中对应的节点订阅地址读取名单")
+			}
+			if proxies == nil {
+				return nil, errors.New("上游响应没有顶层 proxies 节点列表。请确认服务商返回 Clash/Mihomo 节点 YAML，或配置其要求的 User-Agent")
+			}
+			return nil, errors.New("上游返回的 proxies 列表为空。请检查订阅是否仍提供节点，或确认服务商要求的 User-Agent")
 		}
 		for _, node := range nodes {
 			name, _ := stringValue(mappingValue(node, "name"))
@@ -282,7 +292,7 @@ func containsNodeURI(body string) bool {
 		return false
 	}
 	switch strings.ToLower(scheme) {
-	case "ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "hy2", "tuic", "socks", "socks5":
+	case "ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "hy2", "tuic", "socks", "socks5", "anytls", "mieru":
 		return true
 	}
 	return false
