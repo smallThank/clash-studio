@@ -92,7 +92,11 @@ func renameReferences(root *yaml.Node, rename Rename) error {
 			renameValue(mappingValue(node, "dialer-proxy"), rename)
 		}
 		for _, group := range sequence(mappingValue(root, "proxy-groups")) {
-			renameSequence(mappingValue(group, "proxies"), rename)
+			members := mappingValue(group, "proxies")
+			if hasSequenceString(members, rename.From) {
+				renameValue(mappingValue(group, "default-selected"), rename)
+			}
+			renameSequence(members, rename)
 		}
 		for _, key := range []string{"proxy-providers", "rule-providers"} {
 			providers := mappingValue(root, key)

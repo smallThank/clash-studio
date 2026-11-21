@@ -177,8 +177,31 @@ rules:
   await modal().getByRole('group', { name: '显式成员' }).getByRole('checkbox', { name: '🌏 订阅节点', exact: true }).check();
   await button('上移 测试出口', modal()).click();
   await modal().getByRole('group', { name: '订阅源' }).getByRole('checkbox', { name: '测试来源', exact: true }).check();
+  const defaultNode = () => field('默认节点', modal());
+  await shown(modal().getByText(/Mihomo v1\.19\.28/));
+  const suggestions = await defaultNode().evaluate(input => Array.from(input.list.options, option => option.value));
+  verify(suggestions.join('|') === '重命名中继|测试出口|DIRECT|🌏 订阅节点', '默认节点选项应跟随显式成员');
+  await defaultNode().fill('🌏 订阅节点');
   await save();
+  const emojiDefault = preview().locator('code').filter({ hasText: /default-selected:\s*["']?🌏 订阅节点/u });
+  await shown(emojiDefault);
   await shown(button('编辑节点选择'));
+  await button('编辑节点选择').click();
+  verify(await defaultNode().inputValue() === '🌏 订阅节点', '重新打开时应显示已保存的默认节点');
+  await field('类型', modal()).selectOption('url-test');
+  await defaultNode().waitFor({ state: 'hidden' });
+  await field('类型', modal()).selectOption('select');
+  await defaultNode().fill('');
+  await save();
+  await preview().locator('code').filter({ hasText: 'default-selected:' }).waitFor({ state: 'hidden' });
+  await button('编辑节点选择').click();
+  await defaultNode().fill('测试出口');
+  await save();
+  await section('代理节点');
+  await button('编辑测试出口').click();
+  await field('名称', modal()).fill('改名出口');
+  await save();
+  await shown(preview().locator('code').filter({ hasText: 'default-selected: 改名出口' }));
 
   await section('规则集');
   await button('新建规则集').click();
@@ -229,7 +252,8 @@ rules:
     const bearer = await unauthenticated.request.get(address.href, { headers: { Authorization: 'Bearer ' + key } });
     verify(bearer.status() === 200 && (await bearer.text()) === firstYAML, 'Bearer 调用未返回发布版本');
     const groupYAML = firstYAML.split('proxy-groups:')[1].split(/\n[^\s]/)[0];
-    verify(groupYAML.includes('测试出口') && groupYAML.indexOf('测试出口') < groupYAML.indexOf('DIRECT'), '显式组成员未按表单顺序导出');
+    verify(groupYAML.includes('改名出口') && groupYAML.indexOf('改名出口') < groupYAML.indexOf('DIRECT'), '显式组成员未按表单顺序导出');
+    verify(groupYAML.includes('default-selected: 改名出口'), '已发布配置缺少默认节点');
     verify(firstYAML.includes('dialer-proxy: 重命名中继') && firstYAML.includes('RULE-SET,测试规则集,节点选择'), '已发布配置缺少引用或规则');
     verify(firstYAML.includes('192.0.2.30') && firstYAML.includes('use:') &&
       firstYAML.includes('https://provider.example.invalid/proxies.yaml'), '发布订阅应同时包含导入的节点和引用的订阅源');
@@ -307,5 +331,5 @@ rules:
   await button('登录').click();
   await shown(page.getByRole('heading', { name: profile }));
   verify(browserErrors.length === 0, browserErrors.join('\n'));
-  return '桌面和 375px 手机端流程通过，覆盖订阅源引用、节点导入、emoji 预览、发布与持久化';
+  return '桌面和 375px 手机端流程通过，覆盖默认节点、订阅源引用、节点导入、emoji 预览、发布与持久化';
 }

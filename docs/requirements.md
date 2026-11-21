@@ -54,7 +54,7 @@ OpenClash 的 INI 风格覆写模块与 Clash Verge Rev 的扩展 YAML / JavaScr
 | 配置管理 | 新建、上传 YAML 导入、列表、切换、复制、改名、删除。保存草稿，查看已发布版本和更新时间。 |
 | 订阅源 | 完整 YAML 可预览后新建配置。节点可下载后导入当前草稿，也可通过 HTTP Provider 由客户端拉取，支持 `interval`、`path`、健康检查及 `filter/exclude-filter`。 [代理 Provider][mh-pp] |
 | 代理节点 | 新增、复制、删除和按协议编辑。SOCKS5 及 `dialer-proxy` 是样例验收项，表单计划覆盖 SS、VMess、VLESS、Trojan、Hysteria2。保留其余协议和传输参数的原始 YAML。 [出站协议][mh-proxy] · [SOCKS][mh-socks] · [代理链][mh-dialer] |
-| 代理组 | `select`、`url-test`、`fallback`、`load-balance`；名称、显式成员 `proxies`、来源 `use`、筛选、测速 URL、间隔和容差。来自 Provider 的动态节点通过 `use` 选取。 [代理组][mh-group] |
+| 代理组 | `select`、`url-test`、`fallback`、`load-balance`，支持显式成员 `proxies`、来源 `use`、筛选、测速 URL、间隔和容差。手动选择组可配置 `default-selected`，并提示 Mihomo v1.19.28 起支持及历史选择可能优先。 [代理组][mh-group] |
 | DNS | `enable/listen/ipv6/enhanced-mode/fake-ip-range`，`default-nameserver/nameserver/fallback`，`fake-ip-filter/nameserver-policy/proxy-server-nameserver/respect-rules`；余下字段通过高级 YAML 编辑。 [DNS][mh-dns] |
 | 常规与扩展 | 常规页覆盖样例全部 9 项。扩展页可编辑 `tun`、`sniffer`、`hosts`、`profile` 等 Mihomo YAML，并预览生效键。客户端可能接管的字段给出提示。 [常规配置][mh-general] · [TUN][mh-tun] · [Sniffer][mh-sniff] |
 | 规则集 | 配置 `http/file/inline`、`domain/ipcidr/classical`、`yaml/text/mrs`、`url/path/payload/interval/proxy`。按来源显示字段，`mrs` 只允许 `domain` 和 `ipcidr`。本地文件型规则集需在客户端随配置准备相应文件。 [规则 Provider][mh-rp] |

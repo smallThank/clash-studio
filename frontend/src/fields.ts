@@ -110,6 +110,10 @@ export function entityFields(config: Config, key: EntityKey, type: string, editi
       select('type', '类型', ['select', 'url-test', 'fallback', 'load-balance'], { required: true }),
       refs('proxies', '显式成员', endpoints, '使用上下箭头可调整 proxies 的顺序。'),
       refs('use', '订阅源', names(config, 'proxy-providers'), '按此顺序写入 use。'),
+      ...(type === 'select' ? [field('default-selected', '默认节点', 'text', {
+        placeholder: '选择成员或输入订阅节点的名称',
+        hint: '需要 Mihomo v1.19.28 或更新版本。旧内核可将目标节点移到显式成员第一位。客户端保存的历史选择可能优先。',
+      })] : []),
       field('filter', '节点筛选表达式'),
       field('exclude-filter', '排除表达式'),
       ...(type === 'select' ? [] : [url('测速地址'), interval('测速间隔（秒）')]),

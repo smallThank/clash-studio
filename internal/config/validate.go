@@ -332,6 +332,16 @@ func (v *validator) validateGroup(at string, node *yaml.Node) {
 	if includeAll || includeProviders {
 		v.includesProviders[name] = true
 	}
+	if selected := mappingValue(node, "default-selected"); kind == "select" && selected != nil {
+		value, ok := stringValue(selected)
+		switch {
+		case !ok:
+			v.warn(at+".default-selected", "默认节点需要填写名称")
+		case value != "" && providers == 0 && !includeAll && !includeProxies && !includeProviders &&
+			!hasSequenceString(mappingValue(node, "proxies"), value):
+			v.warn(at+".default-selected", "默认节点不在组内，内核将使用第一个成员")
+		}
+	}
 	v.filters(at, node)
 	v.httpURL(at+".url", mappingValue(node, "url"), false)
 	v.integer(at+".interval", mappingValue(node, "interval"), 0, -1, false)

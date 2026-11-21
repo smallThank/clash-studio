@@ -12,6 +12,7 @@ const lineEditor = useTemplateRef<HTMLTextAreaElement>('line-editor');
 const lineSearch = useTemplateRef<HTMLInputElement>('line-search');
 const inputID = computed(() => props.prefix + '-' + props.field.key);
 const selected = computed(() => Array.isArray(model.value) ? model.value : []);
+const datalistID = computed(() => props.field.kind === 'text' && props.field.options?.length ? inputID.value + '-options' : undefined);
 const value = computed({
   get: () => Array.isArray(model.value) ? '' : model.value,
   set: (value: string) => { model.value = value; },
@@ -130,8 +131,12 @@ function toggle(option: string) {
         :min="field.kind === 'number' ? field.min ?? 0 : undefined" :max="field.kind === 'number' ? field.max : undefined"
         :step="field.kind === 'number' ? 1 : undefined" :placeholder="field.placeholder"
         :autocomplete="field.kind === 'password' || field.sensitive ? 'off' : undefined"
+        :list="datalistID"
         :aria-describedby="field.hint ? inputID + '-hint' : undefined"
         @input="value = ($event.target as HTMLInputElement).value" />
+      <datalist v-if="datalistID" :id="datalistID">
+        <option v-for="[option] in field.options" :key="option" :value="option" />
+      </datalist>
       <button v-if="field.sensitive" class="btn secondary" type="button" :aria-pressed="reveal" @click="reveal = !reveal">
         {{ reveal ? '隐藏' : '显示' }}
       </button>

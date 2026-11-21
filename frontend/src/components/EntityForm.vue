@@ -4,7 +4,7 @@ import { APIError, api } from '../api.ts';
 import { formatRule, isRecord, parseRule } from '../config.ts';
 import type { Config, EntityKey } from '../config.ts';
 import { applyEntity, displayValue, entityFields, entityValues, formValues, newEntry, readValues } from '../fields.ts';
-import type { InputValue } from '../fields.ts';
+import type { Field, InputValue } from '../fields.ts';
 import FieldInput from './FieldInput.vue';
 
 const props = defineProps<{
@@ -26,6 +26,12 @@ const fields = computed(() => entityFields(props.config, props.kind, type.value,
 const originalFields = computed(() => entityFields(props.config, props.kind, String(original.value.type ?? ''), editingName.value));
 const fieldSource = computed(() => entityValues(original.value, fields.value, props.kind === 'rules', originalFields.value));
 const values = ref(formValues(fields.value, fieldSource.value));
+const visibleFields = computed(() => fields.value.map(spec => {
+  if (spec.key !== 'default-selected') return spec;
+  const members = values.value.proxies;
+  const options: Field['options'] = Array.isArray(members) ? [...new Set(members)].map(name => [name, name]) : [];
+  return { ...spec, options };
+}));
 const probing = ref(false);
 const probeMessage = ref('');
 const probeError = ref('');
@@ -86,7 +92,7 @@ defineExpose({ data });
 
 <template>
   <div class="form-grid">
-    <FieldInput v-for="field in fields" :key="field.key" prefix="entity" :field="field"
+    <FieldInput v-for="field in visibleFields" :key="field.key" prefix="entity" :field="field"
       :model-value="values[field.key]" @update:model-value="editField(field.key, $event)" />
     <div v-if="kind === 'proxy-providers' && type === 'http'" class="provider-probe full">
       <details>

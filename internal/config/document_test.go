@@ -139,7 +139,8 @@ proxy-providers:
     url: https://provider.example.invalid
     override: {dialer-proxy: Tunnel}
 proxy-groups:
-  - {name: Policy, type: select, proxies: [Tunnel, Endpoint, DIRECT], use: [OldFeed]}
+  - {name: Policy, type: select, proxies: [Tunnel, Endpoint, DIRECT], use: [OldFeed], default-selected: Tunnel}
+  - {name: ProviderOnly, type: select, use: [OldFeed], default-selected: Tunnel}
 rule-providers:
   OldSet: {type: inline, behavior: domain, payload: [example.invalid], proxy: Tunnel}
 dns:
@@ -171,6 +172,8 @@ sub-rules:
 	for _, expected := range []string{
 		"override: {dialer-proxy: Upstream}",
 		"proxies: [Upstream, Endpoint, DIRECT]",
+		"default-selected: Upstream",
+		"{name: ProviderOnly, type: select, use: [Feed], default-selected: Tunnel}",
 		"use: [Feed]",
 		`"rule-set:Domains":`,
 		"RULE-SET,  Domains",
@@ -190,6 +193,34 @@ sub-rules:
 	}
 	if mustYAML(t, doc) != before {
 		t.Fatal("failed edit mutated document")
+	}
+}
+
+func TestValidateDefaultSelected(t *testing.T) {
+	doc := mustParse(t, `
+proxy-providers:
+  Feed: {type: inline, payload: [{name: Remote, type: direct}]}
+proxy-groups:
+  - {name: Listed, type: select, proxies: [DIRECT, REJECT], default-selected: REJECT}
+  - {name: Missing, type: select, proxies: [DIRECT], default-selected: REJECT}
+  - {name: Dynamic, type: select, use: [Feed], default-selected: Remote}
+  - {name: Automatic, type: url-test, proxies: [DIRECT], default-selected: REJECT}
+  - {name: WrongType, type: select, proxies: [DIRECT], default-selected: [DIRECT]}
+  - {name: Empty, type: select, proxies: [DIRECT], default-selected: ""}
+rules: ["MATCH,Listed"]
+`)
+	var paths []string
+	for _, issue := range doc.Validate() {
+		if strings.HasSuffix(issue.Path, ".default-selected") {
+			if issue.Severity != "warning" {
+				t.Fatalf("unexpected default-selected issue: %+v", issue)
+			}
+			paths = append(paths, issue.Path)
+		}
+	}
+	want := []string{"proxy-groups[1].default-selected", "proxy-groups[4].default-selected"}
+	if !slices.Equal(paths, want) {
+		t.Fatalf("default-selected warnings = %v, want %v", paths, want)
 	}
 }
 

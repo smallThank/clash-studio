@@ -422,3 +422,10 @@ func sequence(node *yaml.Node) []*yaml.Node {
 	}
 	return nil
 }
+
+func hasSequenceString(node *yaml.Node, name string) bool {
+	return slices.ContainsFunc(sequence(node), func(item *yaml.Node) bool {
+		value, ok := stringValue(item)
+		return ok && value == name
+	})
+}
