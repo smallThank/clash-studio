@@ -251,7 +251,7 @@ export function readValues(fields: Field[], form: Record<string, InputValue>, so
       } else if (spec.kind === 'bool') entries.push([spec.key, trimmed === 'true']);
       else if (spec.kind === 'lines') entries.push([spec.key, trimmed.split('\n').map(line => line.trim()).filter(Boolean)]);
       else if (spec.kind === 'yaml') entries.push([spec.key, parseYAML(trimmed)]);
-      else entries.push([spec.key, spec.kind === 'password' ? value : trimmed]);
+      else entries.push([spec.key, spec.kind === 'password' || spec.key === 'default-selected' ? value : trimmed]);
     } catch (error) {
       throw new Error(spec.label + '：' + (error instanceof Error ? error.message : String(error)));
     }

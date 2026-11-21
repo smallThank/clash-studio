@@ -124,6 +124,7 @@ rules:
   await field('名称', modal()).fill('测试来源');
   await field('原始订阅地址', modal()).fill('https://provider.example.invalid/proxies.yaml?token=synthetic-only');
   await field('缓存 / 本地路径', modal()).fill('./proxy_provider/test.yaml');
+  await field('其他字段（YAML）', modal()).fill('header:\n  User-Agent: [Mihomo-Test]\noverride:\n  additional-prefix: "[订阅] "');
   await save();
   await shown(button('编辑测试来源'));
   const providerYAML = await preview().innerText();
@@ -181,13 +182,27 @@ rules:
   await shown(modal().getByText(/Mihomo v1\.19\.28/));
   const suggestions = await defaultNode().evaluate(input => Array.from(input.list.options, option => option.value));
   verify(suggestions.join('|') === '重命名中继|测试出口|DIRECT|🌏 订阅节点', '默认节点选项应跟随显式成员');
-  await defaultNode().fill('🌏 订阅节点');
+  const providerDefault = '[订阅] 🌏 远程节点';
+  await page.route(probeRoute, route => {
+    const input = route.request().postDataJSON();
+    verify(input.mode === 'nodes' && input.url === 'https://provider.example.invalid/proxies.yaml?token=synthetic-only' &&
+      input.userAgent === 'Mihomo-Test', '读取所选订阅源时未使用该来源的地址或 User-Agent');
+    return route.fulfill({ json: {
+      kind: 'nodes', yaml: 'proxies:\n  - {name: "🌏 远程节点", type: socks5, server: 192.0.2.32, port: 1080}\n',
+    } });
+  }, { times: 1 });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await button('读取订阅节点', modal()).click();
+  await field('订阅节点', modal()).selectOption(providerDefault);
+  verify(await defaultNode().inputValue() === providerDefault, '订阅节点没有填入默认值或没有应用节点前缀');
+  verify(await modal().evaluate(dialog => dialog.scrollWidth === dialog.clientWidth), '订阅节点选择器发生横向溢出');
   await save();
-  const emojiDefault = preview().locator('code').filter({ hasText: /default-selected:\s*["']?🌏 订阅节点/u });
-  await shown(emojiDefault);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await shown(preview().locator('code').filter({ hasText: /default-selected:\s*["']?\[订阅\] 🌏 远程节点/u }));
+  verify(!(await preview().innerText()).includes('192.0.2.32'), '选择订阅节点不能把它导入显式节点列表');
   await shown(button('编辑节点选择'));
   await button('编辑节点选择').click();
-  verify(await defaultNode().inputValue() === '🌏 订阅节点', '重新打开时应显示已保存的默认节点');
+  verify(await defaultNode().inputValue() === providerDefault, '重新打开时应显示已保存的订阅节点');
   await field('类型', modal()).selectOption('url-test');
   await defaultNode().waitFor({ state: 'hidden' });
   await field('类型', modal()).selectOption('select');

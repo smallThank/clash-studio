@@ -6,6 +6,7 @@ import type { Config, EntityKey } from '../config.ts';
 import { applyEntity, displayValue, entityFields, entityValues, formValues, newEntry, readValues } from '../fields.ts';
 import type { Field, InputValue } from '../fields.ts';
 import FieldInput from './FieldInput.vue';
+import ProviderNodePicker from './ProviderNodePicker.vue';
 
 const props = defineProps<{
   config: Config;
@@ -26,6 +27,7 @@ const fields = computed(() => entityFields(props.config, props.kind, type.value,
 const originalFields = computed(() => entityFields(props.config, props.kind, String(original.value.type ?? ''), editingName.value));
 const fieldSource = computed(() => entityValues(original.value, fields.value, props.kind === 'rules', originalFields.value));
 const values = ref(formValues(fields.value, fieldSource.value));
+const groupSources = computed(() => Array.isArray(values.value.use) ? values.value.use : []);
 const visibleFields = computed(() => fields.value.map(spec => {
   if (spec.key !== 'default-selected') return spec;
   const members = values.value.proxies;
@@ -92,8 +94,14 @@ defineExpose({ data });
 
 <template>
   <div class="form-grid">
-    <FieldInput v-for="field in visibleFields" :key="field.key" prefix="entity" :field="field"
-      :model-value="values[field.key]" @update:model-value="editField(field.key, $event)" />
+    <template v-for="field in visibleFields" :key="field.key">
+      <FieldInput prefix="entity" :field="field" :class="{ full: field.key === 'default-selected' }"
+        :model-value="values[field.key]" @update:model-value="editField(field.key, $event)" />
+      <ProviderNodePicker v-if="field.key === 'default-selected' && groupSources.length"
+        :config="config" :sources="groupSources" :selected="String(values['default-selected'] ?? '')"
+        :has-group-filter="Boolean(values.filter || values['exclude-filter'] || original['exclude-type'])"
+        @select-node="editField('default-selected', $event)" />
+    </template>
     <div v-if="kind === 'proxy-providers' && type === 'http'" class="provider-probe full">
       <details>
         <summary>验证订阅源</summary>
