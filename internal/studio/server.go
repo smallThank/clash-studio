@@ -311,6 +311,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/profiles/{profile}/links/{link}", s.protected(true, s.revokeLink))
 
 	mux.HandleFunc("POST /api/v1/imports/probe", s.protected(true, s.probeImport))
+	mux.HandleFunc("POST /api/v1/imports/provider-nodes", s.protected(true, s.providerNodes))
 	mux.HandleFunc("POST /api/v1/profiles/{profile}/imports/refresh", s.protected(true, s.refreshImport))
 	mux.HandleFunc("/api/v1/", s.api(func(http.ResponseWriter, *http.Request) error { return notFound() }))
 	mux.HandleFunc("GET /api/v1/profiles/{profile}/subscription-key", s.protected(false, s.getSubscriptionKey))

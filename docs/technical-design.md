@@ -67,6 +67,7 @@ flowchart LR
 | `subscription_links` | `id`，`profile_id FK`，`label`，`created_at`，`revoked_at` 可空。多个设备可分别持有链接。 |
 | `profile_subscription_keys` | `profile_id PK/FK`，`key_digest UNIQUE`，`sealed_key`，`updated_at`。每份配置有一把密钥。 |
 | `import_stages` | `id`，`owner_id FK`，可选 `profile_id FK`，导入内容、基线摘要、草稿修订号及过期时间。临时保存待确认的导入或更新。 |
+| `provider_node_cache` | 按账户及订阅地址和 User-Agent 的组合摘要索引。加密保存节点名称，并记录读取时间。编辑代理组时读取缓存，用户主动刷新时才请求上游。 |
 
 按账户和配置 ID 做每一次变更与读取的授权。草稿使用乐观锁 `UPDATE … WHERE id=? AND owner_id=? AND draft_rev=?`，不匹配返回冲突。重试已发布的草稿修订时返回已有版本，保留当前发布指针。首次尝试发布已经被编辑更新的草稿修订时返回版本冲突。删除配置在一个事务内移除导入基线、版本和链接，先清空发布指针以满足外键约束。
 
@@ -84,6 +85,7 @@ flowchart LR
 | `POST /profiles/{id}/duplicate` | 复制草稿为新配置。 |
 | `GET /profiles/{id}/draft`、`PATCH /profiles/{id}/draft` | 读取草稿。以 `expectedDraftRev` 提交模块变更，或以 `importNodes` 提交待追加的节点 YAML，返回草稿及导入结果。 |
 | `POST /imports/probe`、`POST /profiles/{id}/imports/refresh` | 预览完整配置、检查节点源或比较上游变化。探测使用 `mode: nodes` 时返回节点 YAML，供确认后写入当前草稿。 |
+| `POST /imports/provider-nodes` | 读取该账户缓存的节点名单。`refresh: true` 时下载并更新名单，失败时保留上次成功结果。 |
 | `GET /profiles/{id}/preview`、`GET /profiles/{id}/export.yaml` | 预览指定草稿修订与校验结果，或下载该修订的 YAML。导出返回安全的附件文件名。 |
 | `POST /profiles/{id}/publish`、`GET /profiles/{id}/versions` | 发布指定修订，获取版本列表。 |
 | `POST /profiles/{id}/versions/{version}/restore` | 指定当前草稿修订，将历史版本恢复至新草稿。 |

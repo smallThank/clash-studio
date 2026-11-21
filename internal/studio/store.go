@@ -14,7 +14,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 const schema = `
 CREATE TABLE users (
@@ -115,6 +115,16 @@ ALTER TABLE subscription_links_v2 RENAME TO subscription_links;
 CREATE INDEX links_by_profile ON subscription_links(profile_id, created_at, id);
 `
 
+const providerNodeCacheMigration = `
+CREATE TABLE provider_node_cache (
+	owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	source_digest BLOB NOT NULL,
+	sealed_nodes BLOB NOT NULL,
+	fetched_at INTEGER NOT NULL,
+	PRIMARY KEY(owner_id, source_digest)
+);
+`
+
 func (s *Server) migrate(ctx context.Context) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -137,10 +147,15 @@ func (s *Server) migrate(ctx context.Context) error {
 		if err := s.migrateSubscriptionKeys(ctx, tx); err != nil {
 			return fmt.Errorf("migrate subscription keys: %w", err)
 		}
+		fallthrough
+	case 2:
+		if _, err := tx.ExecContext(ctx, providerNodeCacheMigration); err != nil {
+			return fmt.Errorf("create provider node cache: %w", err)
+		}
 	default:
 		return fmt.Errorf("unsupported SQLite schema version %d", version)
 	}
-	if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
 		return fmt.Errorf("record SQLite schema version: %w", err)
 	}
 	return tx.Commit()

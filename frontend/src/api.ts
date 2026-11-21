@@ -71,6 +71,11 @@ export interface Probe {
   issues?: Issue[];
 }
 
+export interface ProviderNodes {
+  nodes: string[] | null;
+  fetchedAt?: string;
+}
+
 export interface RefreshPreview {
   id: string;
   draftRev: number;
@@ -180,6 +185,8 @@ export const api = {
   revokeLink: (id: string, link: string) => request(linkPath(id, link), 'DELETE'),
   probe: (input: { mode: SourceMode; yaml?: string; url?: string; userAgent?: string }) =>
     json<Probe>('/imports/probe', 'POST', input),
+  providerNodes: (input: { url: string; userAgent?: string; refresh: boolean }) =>
+    json<ProviderNodes>('/imports/provider-nodes', 'POST', input),
   previewRefresh: (id: string) => json<RefreshPreview>(profilePath(id, '/imports/refresh'), 'POST', { action: 'preview' }),
   applyRefresh: (id: string, importId: string, expectedDraftRev: number, resolutions: Record<string, 'draft' | 'upstream'>) =>
     json<Draft>(profilePath(id, '/imports/refresh'), 'POST', { action: 'apply', importId, expectedDraftRev, resolutions }),

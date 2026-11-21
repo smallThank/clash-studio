@@ -11,6 +11,19 @@ type NodeImportResult struct {
 	Skipped int `json:"skipped"`
 }
 
+func (doc *Document) ProxyNames() []string {
+	names := []string{}
+	seen := make(map[string]bool)
+	for _, node := range sequence(mappingValue(doc.root, "proxies")) {
+		name, ok := stringValue(mappingValue(node, "name"))
+		if ok && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // AppendProxyNodes retains existing policies and adds the first available node for each name.
 func (doc *Document) AppendProxyNodes(source string) (NodeImportResult, error) {
 	var result NodeImportResult
