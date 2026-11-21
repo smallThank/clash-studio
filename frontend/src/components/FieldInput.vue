@@ -3,6 +3,7 @@ import { computed, ref, useTemplateRef } from 'vue';
 import { moveItem } from '../config.ts';
 import type { Field, InputValue } from '../fields.ts';
 import Icon from './Icon.vue';
+import EditableSelect from './EditableSelect.vue';
 
 const props = defineProps<{ field: Field; prefix: string }>();
 const model = defineModel<InputValue>({ default: '' });
@@ -12,7 +13,6 @@ const lineEditor = useTemplateRef<HTMLTextAreaElement>('line-editor');
 const lineSearch = useTemplateRef<HTMLInputElement>('line-search');
 const inputID = computed(() => props.prefix + '-' + props.field.key);
 const selected = computed(() => Array.isArray(model.value) ? model.value : []);
-const datalistID = computed(() => props.field.kind === 'text' && props.field.options?.length ? inputID.value + '-options' : undefined);
 const value = computed({
   get: () => Array.isArray(model.value) ? '' : model.value,
   set: (value: string) => { model.value = value; },
@@ -97,6 +97,9 @@ function toggle(option: string) {
       </select>
       <Icon name="down" :size="16" />
     </div>
+    <EditableSelect v-else-if="field.kind === 'text' && field.options" :id="inputID" v-model="value"
+      :label="field.label" :options="field.options" :required="field.required" :maxlength="field.max"
+      :placeholder="field.placeholder" :describedby="field.hint ? inputID + '-hint' : undefined" />
     <template v-else-if="field.kind === 'lines' || field.kind === 'yaml'">
       <div v-if="field.searchable" class="line-editor">
         <div class="line-editor-toolbar">
@@ -131,12 +134,8 @@ function toggle(option: string) {
         :min="field.kind === 'number' ? field.min ?? 0 : undefined" :max="field.kind === 'number' ? field.max : undefined"
         :step="field.kind === 'number' ? 1 : undefined" :placeholder="field.placeholder"
         :autocomplete="field.kind === 'password' || field.sensitive ? 'off' : undefined"
-        :list="datalistID"
         :aria-describedby="field.hint ? inputID + '-hint' : undefined"
         @input="value = ($event.target as HTMLInputElement).value" />
-      <datalist v-if="datalistID" :id="datalistID">
-        <option v-for="[option] in field.options" :key="option" :value="option" />
-      </datalist>
       <button v-if="field.sensitive" class="btn secondary" type="button" :aria-pressed="reveal" @click="reveal = !reveal">
         {{ reveal ? '隐藏' : '显示' }}
       </button>

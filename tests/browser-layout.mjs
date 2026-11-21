@@ -79,6 +79,12 @@ rules:
   const footerFits = await dialog().locator('.dialog-actions').evaluate(element =>
     element.getBoundingClientRect().bottom <= innerHeight);
   verify(footerFits, 'dialog actions are below the viewport');
+  const defaultNode = dialog().getByLabel('默认节点', { exact: true });
+  await defaultNode.fill(node);
+  await defaultNode.click();
+  await dialog().getByRole('listbox', { name: '默认节点选项' }).getByRole('option', { name: 'DIRECT', exact: true }).waitFor();
+  await fit('expanded default node selector', [...modalAreas, '.editable-select', '.editable-select-options']);
+  await defaultNode.press('Escape');
   await button('取消', dialog()).click();
 
   await page.setViewportSize({ width: 1011, height: 768 });
