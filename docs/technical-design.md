@@ -39,10 +39,11 @@ flowchart LR
 
 ### 原始订阅导入
 
-1. 用户选择「导入完整 YAML」或「引用代理节点源」。服务器可发起一次受限探测，识别响应并显示不含凭据的摘要。允许设置针对上游的 User-Agent。
+1. 用户选择「导入完整 YAML」「引用代理节点源」或「导入订阅节点」。服务器可发起一次受限探测，识别响应。列表摘要只展示主机或节点名称与类型。允许设置针对上游的 User-Agent。
 2. 完整 YAML 先进入导入预览，用户确认后新建配置。记录来源设定和上次成功摘要。主动刷新时以最近导入基线、上游新文档和现有草稿做三方比较，冲突项由用户选择；上游失败不修改草稿。
 3. 远程节点源保留完整原地址、类型和下载参数，导出为 `proxy-providers`。在管理页只展示脱敏地址，最终 YAML 包含客户端拉取所需参数。目标设备需要能访问原地址。生成的订阅接口只读取已发布内容。
-4. 限制重定向至允许的 HTTP(S) 地址，在每一跳检查解析与实际连接目标，拒绝本机、私网、链路本地、保留地址及含用户信息的 URL；禁止 DNS 重绑定绕过。导入服务设置连接超时、总超时、解压后体积限制和限速。规则集探测若加入，复用同一下载组件。
+4. 「导入订阅节点」的探测返回从上游 YAML 提取的 `proxies`。确认后按草稿修订号提交该 YAML，服务端按名称追加节点，保留类型、高级字段和现有配置。导出和发布使用保存的节点。
+5. 限制重定向至允许的 HTTP(S) 地址，在每一跳检查解析与实际连接目标，拒绝本机、私网、链路本地、保留地址及含用户信息的 URL；禁止 DNS 重绑定绕过。导入服务设置连接超时、总超时、解压后体积限制和限速。规则集探测若加入，复用同一下载组件。
 
 ### 校验、导出、发布
 
@@ -81,8 +82,8 @@ flowchart LR
 | `GET /profiles`、`POST /profiles` | 分页读取自己的配置，新建配置。可附带已校验的 YAML 或确认导入 ID。 |
 | `GET /profiles/{id}`、`PATCH /profiles/{id}`、`DELETE /profiles/{id}` | 读取带 `draftRev` 的配置摘要、修改名称等元数据、删除配置。 |
 | `POST /profiles/{id}/duplicate` | 复制草稿为新配置。 |
-| `GET /profiles/{id}/draft`、`PATCH /profiles/{id}/draft` | 读取草稿与模块配置、以 `expectedDraftRev` 提交模块变更，返回新修订。 |
-| `POST /imports/probe`、`POST /profiles/{id}/imports/refresh` | 按文件或原始 URL 生成短期导入预览，或比较上游变化。导入确认后才写草稿。 |
+| `GET /profiles/{id}/draft`、`PATCH /profiles/{id}/draft` | 读取草稿。以 `expectedDraftRev` 提交模块变更，或以 `importNodes` 提交待追加的节点 YAML，返回草稿及导入结果。 |
+| `POST /imports/probe`、`POST /profiles/{id}/imports/refresh` | 预览完整配置、检查节点源或比较上游变化。探测使用 `mode: nodes` 时返回节点 YAML，供确认后写入当前草稿。 |
 | `GET /profiles/{id}/preview`、`GET /profiles/{id}/export.yaml` | 预览指定草稿修订与校验结果，或下载该修订的 YAML。导出返回安全的附件文件名。 |
 | `POST /profiles/{id}/publish`、`GET /profiles/{id}/versions` | 发布指定修订，获取版本列表。 |
 | `POST /profiles/{id}/versions/{version}/restore` | 指定当前草稿修订，将历史版本恢复至新草稿。 |

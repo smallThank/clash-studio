@@ -217,13 +217,16 @@ func publicDial(ctx context.Context, network, address string) (net.Conn, error) 
 }
 
 func ParseImport(source, mode string) (*Document, error) {
-	if mode != "config" && mode != "provider" {
+	if mode != "config" && mode != "provider" && mode != "nodes" {
 		return nil, errors.New("请选择完整配置或节点订阅")
 	}
 	body := strings.TrimSpace(strings.TrimPrefix(source, "\ufeff"))
 	if strings.HasPrefix(body, "-----BEGIN AGE ENCRYPTED FILE-----") {
 		if mode == "provider" {
 			return nil, errors.New("已识别到 AGE 加密订阅。请在其他字段（YAML）配置 age-secret-key，保存后由支持 AGE 的客户端拉取并验证")
+		}
+		if mode == "nodes" {
+			return nil, errors.New("已识别到 AGE 加密订阅。请使用服务商提供的明文 YAML 地址，或添加订阅源，由支持 AGE 的客户端拉取")
 		}
 		return nil, errors.New("已识别到 AGE 加密配置。请先在本地解密为 YAML，再上传导入")
 	}
@@ -239,8 +242,9 @@ func ParseImport(source, mode string) (*Document, error) {
 		}
 		return nil, errors.New("上游响应无法识别为 Clash/Mihomo YAML。请检查请求 User-Agent，或确认服务商使用的加密格式")
 	}
-	if mode == "provider" {
-		nodes := sequence(mappingValue(doc.root, "proxies"))
+	if mode == "provider" || mode == "nodes" {
+		proxies := mappingValue(doc.root, "proxies")
+		nodes := sequence(proxies)
 		if len(nodes) == 0 {
 			return nil, errors.New("节点订阅需包含非空 proxies 列表")
 		}
@@ -250,6 +254,11 @@ func ParseImport(source, mode string) (*Document, error) {
 			if node.Kind != yaml.MappingNode || strings.TrimSpace(name) == "" || strings.TrimSpace(protocol) == "" {
 				return nil, errors.New("节点订阅的条目需要名称与类型")
 			}
+		}
+		if mode == "nodes" {
+			root := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			setMappingValue(root, "proxies", proxies)
+			return &Document{root: root}, nil
 		}
 		return doc, nil
 	}

@@ -18,7 +18,7 @@ interface Module {
 export const modules: Module[] = [
   { id: 'basics', label: '常规设置', icon: 'sliders', group: '基础', detail: '配置监听端口、运行模式与局域网访问。' },
   { id: 'dns', label: 'DNS', icon: 'globe', group: '基础', detail: '管理解析器、域名解析策略与 Fake-IP 过滤。' },
-  { id: 'proxy-providers', label: '订阅源', icon: 'rss', group: '代理', detail: '添加服务商订阅地址，供代理组通过 use 引用。', add: '添加订阅源' },
+  { id: 'proxy-providers', label: '订阅源', icon: 'rss', group: '代理', detail: '添加订阅源由客户端定期拉取，也可下载订阅节点写入当前配置。', add: '添加订阅源' },
   { id: 'proxies', label: '代理节点', icon: 'server', group: '代理', detail: '添加独立的代理节点，并设置可选的拨号出口。', add: '新建节点' },
   { id: 'proxy-groups', label: '代理组', icon: 'layers', group: '代理', detail: '组合节点、其他代理组或订阅源，为规则指定流量出口。', add: '新建代理组' },
   { id: 'rule-providers', label: '规则集', icon: 'box', group: '分流', detail: '管理可被 RULE-SET 引用的规则资源及下载策略。', add: '新建规则集' },

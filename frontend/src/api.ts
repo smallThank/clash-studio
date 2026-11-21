@@ -1,5 +1,5 @@
 export type Target = 'openclash' | 'verge' | 'both';
-export type SourceMode = 'config' | 'provider';
+export type SourceMode = 'config' | 'provider' | 'nodes';
 export type RenameKind = 'proxies' | 'proxy-groups' | 'proxy-providers' | 'rule-providers';
 
 export interface Account {
@@ -153,6 +153,10 @@ export const api = {
   draft: (id: string) => json<Draft>(profilePath(id, '/draft')),
   patchDraft: (id: string, expectedDraftRev: number, patch: Patch) =>
     json<Draft>(profilePath(id, '/draft'), 'PATCH', { expectedDraftRev, ...patch }),
+  importNodes: (id: string, expectedDraftRev: number, importNodes: string) =>
+    json<Draft & { nodeImport: { added: number; skipped: number } }>(
+      profilePath(id, '/draft'), 'PATCH', { expectedDraftRev, importNodes },
+    ),
   preview: (id: string, revision: { rev: number } | { version: number }) =>
     json<Preview>(profilePath(id, '/preview') + '?' + new URLSearchParams(Object.entries(revision).map(([key, value]) => [key, String(value)]))),
   download: async (id: string, draftRev: number) => {

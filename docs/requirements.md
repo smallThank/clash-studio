@@ -22,12 +22,13 @@
 
 OpenClash 的 INI 风格覆写模块与 Clash Verge Rev 的扩展 YAML / JavaScript 分别由客户端处理。本应用的「扩展配置」第一期定义为 **发布前合入的 Mihomo 配置字段**，最终随完整 YAML 导出。OpenClash Smart 专属能力与两款客户端特有的覆写脚本进入后续评估。 [OpenClash 覆写模块][oc-module] · [Clash Verge Rev 扩展][cv-extend]
 
-### 原始订阅地址有两种用法
+### 原始订阅地址的用法
 
 | 用法 | 上游响应 | 结果与更新方式 |
 | --- | --- | --- |
 | 导入完整配置 | 含配置段的 Clash/Mihomo YAML | 导入预览后新建草稿。刷新需比较上游版本并确认，保留用户在网页中的编辑。 |
 | 引用代理节点源 | 目标客户端可读的节点 Provider 内容，如包含 `proxies` 列表的 YAML | 地址原样写入 `proxy-providers.<name>.url`，代理组通过 `use` 选择。由客户端按 `interval` 更新节点。客户端需能访问原地址。 |
+| 导入订阅节点 | 包含非空 `proxies` 列表的 Clash/Mihomo YAML | 预览并确认后，把节点追加到当前草稿的 `proxies`。跳过与已有策略或本批已导入节点同名的条目，代理组通过「显式成员」选择。 |
 
 同一服务商 URL 可能按请求方式或 User-Agent 返回不同内容，首次识别需查看实际响应。第一期优先验收 YAML，Base64 或 URI 列表只在目标版本实测通过后标为兼容。遇到 HTML 登录页、识别不了的内容或需要第三方转换的地址，页面提示原因并引导提供 Clash/Mihomo YAML。 [OpenClash 订阅参数][oc-sub] · [Mihomo Provider][mh-pp]
 
@@ -51,7 +52,7 @@ OpenClash 的 INI 风格覆写模块与 Clash Verge Rev 的扩展 YAML / JavaScr
 | --- | --- |
 | 注册、登录、账户 | 用户名与密码注册、登录、登出。每个账户仅访问自己的配置、版本和订阅。 |
 | 配置管理 | 新建、上传 YAML 导入、列表、切换、复制、改名、删除。保存草稿，查看已发布版本和更新时间。 |
-| 订阅源 | 记录服务商原始地址及类型。整份 YAML 可导入预览；节点源映射为 HTTP Provider，支持 `interval`、`path`、健康检查、`filter/exclude-filter`；高级字段保留。 [代理 Provider][mh-pp] |
+| 订阅源 | 完整 YAML 可预览后新建配置。节点可下载后导入当前草稿，也可通过 HTTP Provider 由客户端拉取，支持 `interval`、`path`、健康检查及 `filter/exclude-filter`。 [代理 Provider][mh-pp] |
 | 代理节点 | 新增、复制、删除和按协议编辑。SOCKS5 及 `dialer-proxy` 是样例验收项，表单计划覆盖 SS、VMess、VLESS、Trojan、Hysteria2。保留其余协议和传输参数的原始 YAML。 [出站协议][mh-proxy] · [SOCKS][mh-socks] · [代理链][mh-dialer] |
 | 代理组 | `select`、`url-test`、`fallback`、`load-balance`；名称、显式成员 `proxies`、来源 `use`、筛选、测速 URL、间隔和容差。来自 Provider 的动态节点通过 `use` 选取。 [代理组][mh-group] |
 | DNS | `enable/listen/ipv6/enhanced-mode/fake-ip-range`，`default-nameserver/nameserver/fallback`，`fake-ip-filter/nameserver-policy/proxy-server-nameserver/respect-rules`；余下字段通过高级 YAML 编辑。 [DNS][mh-dns] |

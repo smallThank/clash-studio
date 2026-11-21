@@ -2,7 +2,7 @@
 import { onMounted, useTemplateRef, watch } from 'vue';
 import Icon from './Icon.vue';
 
-const props = defineProps<{ title: string; submit?: string; busy?: boolean; error?: string }>();
+const props = defineProps<{ title: string; submit?: string; busy?: boolean; submitDisabled?: boolean; error?: string }>();
 const emit = defineEmits<{ close: []; submit: [] }>();
 const dialog = useTemplateRef<HTMLDialogElement>('dialog');
 const feedback = useTemplateRef<HTMLParagraphElement>('feedback');
@@ -20,7 +20,7 @@ watch(() => props.error, error => { if (error) feedback.value?.focus(); }, { flu
       <h2 id="dialog-title">{{ title }}</h2>
       <button class="icon-btn" type="button" aria-label="关闭" :disabled="busy" @click="emit('close')"><Icon name="close" :size="16" /></button>
     </div>
-    <form id="dialog-form" @submit.prevent="emit('submit')">
+    <form id="dialog-form" @submit.prevent="!busy && !submitDisabled && emit('submit')">
       <div class="dialog-body">
         <slot />
         <p v-if="error" ref="feedback" class="form-error" role="alert" tabindex="-1">{{ error }}</p>
@@ -29,7 +29,7 @@ watch(() => props.error, error => { if (error) feedback.value?.focus(); }, { flu
         <slot name="actions" />
         <div class="dialog-spacer" />
         <button type="button" class="btn secondary" :disabled="busy" @click="emit('close')">{{ submit ? '取消' : '关闭' }}</button>
-        <button v-if="submit" type="submit" class="btn primary" :disabled="busy">{{ submit }}</button>
+        <button v-if="submit" type="submit" class="btn primary" :disabled="busy || submitDisabled">{{ submit }}</button>
       </div>
     </form>
   </dialog>

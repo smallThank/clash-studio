@@ -45,9 +45,10 @@ type profileMetadata struct {
 
 type draftMutation struct {
 	revisionRequest
-	Changes map[string]json.RawMessage `json:"changes"`
-	Remove  []string                   `json:"remove,omitempty"`
-	Rename  *config.Rename             `json:"rename,omitempty"`
+	Changes     map[string]json.RawMessage `json:"changes"`
+	Remove      []string                   `json:"remove,omitempty"`
+	Rename      *config.Rename             `json:"rename,omitempty"`
+	ImportNodes *string                    `json:"importNodes,omitempty"`
 }
 
 type createProfileRequest struct {
@@ -364,6 +365,9 @@ func (s *Server) patchDraft(w http.ResponseWriter, r *http.Request, user session
 	if req.ExpectedDraftRev <= 0 {
 		return badRequest("请指定要修改的草稿修订。")
 	}
+	if req.ImportNodes != nil && (len(req.Changes) != 0 || len(req.Remove) != 0 || req.Rename != nil) {
+		return badRequest("请单独提交订阅节点导入。")
+	}
 	ctx := r.Context()
 	id := r.PathValue("profile")
 	original, err := s.readDraft(ctx, s.db, user.ID, id)
@@ -377,12 +381,22 @@ func (s *Server) patchDraft(w http.ResponseWriter, r *http.Request, user session
 	if err != nil {
 		return err
 	}
-	if err := doc.Apply(req.Changes, req.Remove, req.Rename); err != nil {
-		return invalidConfig(err.Error(), nil)
+	var nodeImport *config.NodeImportResult
+	if req.ImportNodes != nil {
+		result, importErr := doc.AppendProxyNodes(*req.ImportNodes)
+		nodeImport, err = &result, importErr
+	} else {
+		err = doc.Apply(req.Changes, req.Remove, req.Rename)
 	}
-	yaml, err := doc.YAML()
 	if err != nil {
 		return invalidConfig(err.Error(), nil)
+	}
+	yaml := original.YAML
+	if nodeImport == nil || nodeImport.Added > 0 {
+		yaml, err = doc.YAML()
+		if err != nil {
+			return invalidConfig(err.Error(), nil)
+		}
 	}
 	// The time-consuming YAML work runs before the SQLite write; the revision is
 	// checked again by the update to avoid overwriting edits made meanwhile.
@@ -390,7 +404,10 @@ func (s *Server) patchDraft(w http.ResponseWriter, r *http.Request, user session
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, draft)
+	writeJSON(w, http.StatusOK, struct {
+		Draft
+		NodeImport *config.NodeImportResult `json:"nodeImport,omitempty"`
+	}{Draft: draft, NodeImport: nodeImport})
 	return nil
 }
 

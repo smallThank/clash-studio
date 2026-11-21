@@ -12,6 +12,7 @@ import EntityForm from './components/EntityForm.vue';
 import Icon from './components/Icon.vue';
 import ImportForm from './components/ImportForm.vue';
 import ModalDialog from './components/ModalDialog.vue';
+import NodeImportForm from './components/NodeImportForm.vue';
 import YamlPane from './components/YamlPane.vue';
 import { yamlPreviewText } from './yaml-preview.ts';
 import ThemeToggle from './components/ThemeToggle.vue';
@@ -40,12 +41,13 @@ const checked = ref(false);
 const editor = useTemplateRef<InstanceType<typeof EditorPane>>('editor');
 let checkSequence = 0;
 
-type Popup = 'new' | 'manage' | 'remove-profile' | 'entity' | 'remove-entity' | 'bulk' | 'check' | 'publish' | 'links' |
+type Popup = 'new' | 'manage' | 'remove-profile' | 'entity' | 'remove-entity' | 'bulk' | 'import-nodes' | 'check' | 'publish' | 'links' |
   'new-link' | 'revoke' | 'link-content' | 'versions' | 'restore' | 'diff' | 'refresh' | 'account' | 'subscription-key' | 'rotate-key' | 'subscription-url';
 const modal = ref<Popup | null>(null);
 const modalError = ref('');
 const entity = useTemplateRef<InstanceType<typeof EntityForm>>('entity');
 const importer = useTemplateRef<InstanceType<typeof ImportForm>>('importer');
+const nodeImporter = useTemplateRef<InstanceType<typeof NodeImportForm>>('node-importer');
 const editingKind = ref<EntityKey>('proxy-groups');
 const editingIndex = ref<number | null>(null);
 const currentEntry = shallowRef<ReturnType<typeof listFor>[number]>();
@@ -70,7 +72,7 @@ let notificationTimer: ReturnType<typeof setTimeout> | undefined;
 
 const modalTitles: Record<Popup, string> = {
   new: '新建配置', manage: '配置管理', 'remove-profile': '删除配置', entity: '编辑条目', 'remove-entity': '删除条目',
-  bulk: '批量添加规则', check: '配置校验', publish: '发布订阅', links: '订阅链接', 'new-link': '新建订阅链接', revoke: '吊销订阅链接',
+  bulk: '批量添加规则', 'import-nodes': '导入订阅节点', check: '配置校验', publish: '发布订阅', links: '订阅链接', 'new-link': '新建订阅链接', revoke: '吊销订阅链接',
   'link-content': '复制内容', 'subscription-url': '订阅地址', 'subscription-key': '订阅密钥', 'rotate-key': '轮换订阅密钥', versions: '发布记录', restore: '恢复历史版本', diff: '比较版本', refresh: '刷新原始订阅', account: '当前账户',
 };
 const entryLabel = computed(() => editingKind.value === 'rules' ? '第 ' + ((currentEntry.value?.index ?? 0) + 1) + ' 条规则' : currentEntry.value?.name);
@@ -85,7 +87,7 @@ const modalTitle = computed(() => {
 });
 const submitLabels: Partial<Record<Popup, string>> = {
   new: '创建配置', manage: '保存', 'remove-profile': '确认删除', entity: '保存到草稿', 'remove-entity': '确认删除',
-  bulk: '添加到草稿', publish: '确认发布', 'new-link': '生成订阅地址', revoke: '确认吊销', restore: '恢复到草稿', refresh: '应用更新', 'rotate-key': '确认轮换',
+  bulk: '添加到草稿', 'import-nodes': '导入到草稿', publish: '确认发布', 'new-link': '生成订阅地址', revoke: '确认吊销', restore: '恢复到草稿', refresh: '应用更新', 'rotate-key': '确认轮换',
 };
 
 function notify(message: string) {
@@ -463,6 +465,16 @@ async function submitDialog() {
         await saveDraft(withEntity(configuration.value, editingKind.value, editingIndex.value, null));
         feedback = '已删除条目。';
         break;
+      case 'import-nodes': {
+        if (!nodeImporter.value?.canImport) return;
+        const saved = await api.importNodes(id, rev, nodeImporter.value.yaml);
+        setDraft(saved);
+        await checkDraft(id, saved.draftRev);
+        showSection('proxies');
+        const { added, skipped } = saved.nodeImport;
+        feedback = '已导入 ' + added + ' 个节点' + (skipped ? '，跳过 ' + skipped + ' 个同名节点' : '') + '。';
+        break;
+      }
       case 'bulk': {
         const added = text.value.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
         if (!added.length) throw new Error('请填写至少一条规则。');
@@ -653,7 +665,8 @@ function timeLabel(value: string) {
           <div class="work-grid">
             <EditorPane ref="editor" :key="profile.id" :class="{ 'mobile-active': mobileView === 'editor' }"
               :config="configuration" :section="section" :busy="busy" :save-settings="saveSettings"
-              @add="openEditor($event, null)" @edit="openEditor" @move="moveRule" @bulk="openDialog('bulk')" />
+              @add="openEditor($event, null)" @edit="openEditor" @move="moveRule" @bulk="openDialog('bulk')"
+              @import-nodes="openDialog('import-nodes')" />
             <YamlPane :class="{ 'mobile-active': mobileView === 'preview' }" :yaml="yaml" :published="previewMode === 'published'"
               :can-show-published="Boolean(profile.publishedVersion)" :issues="issues" :checking="checking" :checked="checked"
               @mode="showVersion" @copy="copy(yaml, '已复制 YAML。')" @validate="showIssues" @links="run(() => showLinks(), false)"
@@ -665,8 +678,10 @@ function timeLabel(value: string) {
   </div>
 
   <ModalDialog v-if="modal" :key="modal" :title="modalTitle" :submit="submitLabels[modal]" :busy="busy" :error="modalError"
+    :submit-disabled="modal === 'import-nodes' && !nodeImporter?.canImport"
     @close="closeDialog" @submit="submitDialog">
     <ImportForm v-if="modal === 'new'" ref="importer" />
+    <NodeImportForm v-else-if="modal === 'import-nodes'" ref="node-importer" :config="configuration" :busy="busy" />
     <template v-else-if="modal === 'manage'">
       <div class="form-grid">
         <label class="field">配置名称<input v-model="profileName" maxlength="48" required /></label>

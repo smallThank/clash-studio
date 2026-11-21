@@ -14,7 +14,7 @@ const props = defineProps<{
   saveSettings: (key: SettingsKey, values: Config) => Promise<void>;
 }>();
 const emit = defineEmits<{
-  add: [EntityKey]; edit: [EntityKey, number]; move: [number, number]; bulk: [];
+  add: [EntityKey]; edit: [EntityKey, number]; move: [number, number]; bulk: []; importNodes: [];
 }>();
 
 const current = computed(() => modules.find(module => module.id === props.section)!);
@@ -103,6 +103,8 @@ defineExpose({ focusRow });
           :aria-label="'搜索' + current.label" :placeholder="'搜索' + current.label + '…'" /></label>
         <div class="editor-actions">
           <button v-if="entity === 'rules'" type="button" class="btn secondary" :disabled="busy" @click="emit('bulk')">批量添加</button>
+          <button v-if="entity === 'proxy-providers' || entity === 'proxies'" type="button" class="btn secondary"
+            :disabled="busy" @click="emit('importNodes')">导入订阅节点</button>
           <button type="button" class="btn primary" :disabled="busy" @click="emit('add', entity)"><Icon name="plus" :size="17" />{{ current.add }}</button>
         </div>
       </div>

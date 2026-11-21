@@ -214,6 +214,10 @@ func (doc *Document) Apply(changes map[string]json.RawMessage, remove []string, 
 			return err
 		}
 	}
+	return doc.replaceRoot(working)
+}
+
+func (doc *Document) replaceRoot(working *yaml.Node) error {
 	updated := &Document{root: working}
 	encoded, err := updated.YAML()
 	if err != nil {

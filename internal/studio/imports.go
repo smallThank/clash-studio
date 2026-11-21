@@ -85,8 +85,8 @@ func (s *Server) probeImport(w http.ResponseWriter, r *http.Request, user sessio
 	if err := parseBody(w, r, &req); err != nil {
 		return err
 	}
-	if req.Mode != "config" && req.Mode != "provider" {
-		return badRequest("请选择导入完整配置或探测节点订阅。")
+	if req.Mode != "config" && req.Mode != "provider" && req.Mode != "nodes" {
+		return badRequest("请选择导入完整配置、探测订阅源或导入节点。")
 	}
 	rawURL := strings.TrimSpace(req.URL)
 	if (req.YAML == nil) == (rawURL == "") {
@@ -122,12 +122,14 @@ func (s *Server) probeImport(w http.ResponseWriter, r *http.Request, user sessio
 		Host   string         `json:"host,omitempty"`
 		Issues []config.Issue `json:"issues"`
 	}{Kind: req.Mode, Host: host, Issues: []config.Issue{}}
-	if req.Mode == "config" {
-		response.Issues = issuesFor(doc)
+	if req.Mode != "provider" {
 		response.YAML, err = doc.YAML()
 		if err != nil {
 			return invalidConfig(err.Error(), nil)
 		}
+	}
+	if req.Mode == "config" {
+		response.Issues = issuesFor(doc)
 		response.ID, err = s.stageImport(ctx, user.ID, "", importStage{
 			YAML: response.YAML, Source: source,
 		})

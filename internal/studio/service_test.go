@@ -455,6 +455,89 @@ func TestUpstreamImportPreviewAndRefresh(t *testing.T) {
 	}, nil), http.StatusNotFound)
 }
 
+func TestImportSubscriptionNodesIntoDraft(t *testing.T) {
+	sourceURL := "https://input.example.invalid/nodes?token=upstream-secret"
+	fetches := 0
+	handler, _ := testOpen(t, filepath.Join(t.TempDir(), "nodes.db"), Options{
+		Fetch: func(_ context.Context, url, agent string) (string, error) {
+			fetches++
+			if url != sourceURL || agent != "Mihomo-Test" {
+				t.Fatal("node import did not pass the requested address and User-Agent")
+			}
+			return "mixed-port: 7899\ncommon: &node {type: socks5, server: edge.example.invalid, port: 1080}\n" +
+				"proxies:\n  - {<<: *node, name: \"\\U0001F431 新节点\", custom: 9007199254740993}\n" +
+				"  - {<<: *node, name: \"🐱 新节点\", port: 9999}\n" +
+				"  - {<<: *node, name: Local, port: 9998}\n" +
+				"  - {<<: *node, name: Group}\n  - {<<: *node, name: DIRECT}\n" +
+				"rules: [MATCH, REJECT]\n", nil
+		},
+	})
+	client := registerClient(t, handler, "NodeImporter")
+	other := registerClient(t, handler, "OtherImporter")
+	initial := "mixed-port: 7890\nproxies:\n  # Keep the existing node\n  - {name: Local, type: socks5, server: local.example.invalid, port: 1081}\n" +
+		"proxy-groups:\n  - {name: Group, type: select, proxies: [Local]}\n" +
+		"proxy-providers:\n  Feed: {type: http, url: 'https://other.example.invalid/nodes', interval: 3600}\n" +
+		"rules: ['MATCH,Group']\n"
+	rec := client.request(handler, http.MethodPost, apiPrefix+"/profiles", createProfileRequest{
+		profileMetadata: profileMetadata{Name: "本地节点", Target: "both"}, YAML: &initial,
+	}, nil)
+	expect(t, rec, http.StatusCreated)
+	profile := decode[Profile](t, rec)
+	path := profileURL(profile.ID)
+
+	rec = client.request(handler, http.MethodPost, apiPrefix+"/imports/probe", probeRequest{
+		Mode: "nodes", URL: sourceURL, UserAgent: "Mihomo-Test",
+	}, nil)
+	expect(t, rec, http.StatusOK)
+	preview := decode[struct {
+		Kind string
+		YAML string
+		Host string
+		ID   string
+	}](t, rec)
+	if preview.Kind != "nodes" || preview.Host != "input.example.invalid" || preview.ID != "" ||
+		strings.Contains(rec.Body.String(), "upstream-secret") || strings.Contains(preview.YAML, "mixed-port:") ||
+		strings.Contains(preview.YAML, "common:") || strings.Contains(preview.YAML, "rules:") {
+		t.Fatalf("preview must expose only the upstream host and nodes: %+v", preview)
+	}
+	rec = client.request(handler, http.MethodGet, path+"/draft", nil, nil)
+	expect(t, rec, http.StatusOK)
+	if draft := decode[Draft](t, rec); draft.DraftRev != 1 || strings.Contains(draft.YAML, "edge.example.invalid") {
+		t.Fatal("preview changed the draft")
+	}
+
+	request := draftMutation{revisionRequest: revisionRequest{ExpectedDraftRev: 1}, ImportNodes: &preview.YAML}
+	expect(t, other.request(handler, http.MethodPatch, path+"/draft", request, nil), http.StatusNotFound)
+	rec = client.request(handler, http.MethodPatch, path+"/draft", request, nil)
+	expect(t, rec, http.StatusOK)
+	saved := decode[struct {
+		Draft
+		NodeImport config.NodeImportResult
+	}](t, rec)
+	if saved.DraftRev != 2 || saved.NodeImport != (config.NodeImportResult{Added: 1, Skipped: 4}) ||
+		!strings.Contains(saved.YAML, "9007199254740993") || !strings.Contains(saved.YAML, "# Keep the existing node") ||
+		!strings.Contains(saved.YAML, "port: 1081") || !strings.Contains(saved.YAML, "mixed-port: 7890") ||
+		!strings.Contains(saved.YAML, "proxy-providers:") || strings.Contains(saved.YAML, "upstream-secret") ||
+		strings.Contains(saved.YAML, "port: 9999") || strings.Contains(saved.YAML, "port: 9998") {
+		t.Fatalf("node import did not preserve the existing configuration or imported fields: %+v", saved)
+	}
+	expect(t, client.request(handler, http.MethodPatch, path+"/draft", request, nil), http.StatusConflict)
+	request.ExpectedDraftRev = 2
+	rec = client.request(handler, http.MethodPatch, path+"/draft", request, nil)
+	expect(t, rec, http.StatusOK)
+	if replay := decode[struct {
+		Draft
+		NodeImport config.NodeImportResult
+	}](t, rec); replay.Draft != saved.Draft || replay.NodeImport != (config.NodeImportResult{Skipped: 5}) {
+		t.Fatal("re-importing identical node names should leave the draft revision and YAML intact")
+	}
+	rec = client.request(handler, http.MethodGet, path+"/export.yaml?rev=2", nil, nil)
+	expect(t, rec, http.StatusOK)
+	if rec.Body.String() != saved.YAML || fetches != 1 {
+		t.Fatal("export or draft writes fetched the upstream again or changed the saved YAML")
+	}
+}
+
 func TestDefaultFetcherReportsSanitizedReason(t *testing.T) {
 	handler, _ := testOpen(t, filepath.Join(t.TempDir(), "failure.db"), Options{})
 	client := registerClient(t, handler, "FetchTest")

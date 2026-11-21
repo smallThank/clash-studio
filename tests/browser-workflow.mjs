@@ -126,8 +126,39 @@ rules:
   await field('缓存 / 本地路径', modal()).fill('./proxy_provider/test.yaml');
   await save();
   await shown(button('编辑测试来源'));
+  const providerYAML = await preview().innerText();
+  verify(providerYAML.includes('proxy-providers:') && providerYAML.includes('provider.example.invalid/proxies.yaml'),
+    '引用方式未在 YAML 中保留原始订阅地址');
 
-  await section('代理节点');
+  const nodeSubscription = 'https://upstream.example.invalid/nodes';
+  await page.route(probeRoute, route => {
+    const input = route.request().postDataJSON();
+    verify(input.mode === 'nodes' && input.url === nodeSubscription && input.userAgent === 'mihomo', '节点探测请求不正确');
+    return route.fulfill({
+      json: { kind: 'nodes', host: 'upstream.example.invalid', yaml: String.raw`proxies:
+  - {name: "\U0001F30F 订阅节点", type: socks5, server: 192.0.2.30, port: 1080}
+  - {name: 测试中继, type: socks5, server: 192.0.2.31, port: 1080}
+` },
+    });
+  });
+  await button('导入订阅节点').click();
+  verify(await button('导入到草稿', modal()).isDisabled(), '预览前允许写入节点');
+  await page.setViewportSize({ width: 375, height: 812 });
+  await field('原始订阅地址', modal()).fill(nodeSubscription);
+  await field('请求 User-Agent（可选）', modal()).fill('mihomo');
+  await button('预览节点', modal()).click();
+  await shown(modal().getByText('🌏 订阅节点', { exact: true }));
+  await shown(modal().getByText(/可导入 1 个节点.*跳过 1 个同名节点/));
+  verify(await modal().evaluate(dialog => dialog.scrollWidth === dialog.clientWidth), '节点导入弹窗发生横向溢出');
+  await finish('导入到草稿');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.unroute(probeRoute);
+  await shown(page.getByRole('heading', { name: '代理节点' }));
+  await shown(button('编辑🌏 订阅节点'));
+  const importedYAML = await preview().innerText();
+  verify(importedYAML.includes('🌏 订阅节点') && !importedYAML.includes('192.0.2.31') && !importedYAML.includes(nodeSubscription),
+    '导入应追加新节点，保留原有同名节点');
+
   await button('新建节点').click();
   await field('名称', modal()).fill('测试出口');
   await field('服务器', modal()).fill('192.0.2.27');
@@ -143,6 +174,7 @@ rules:
   await section('代理组');
   await button('编辑节点选择').click();
   await modal().getByRole('group', { name: '显式成员' }).getByRole('checkbox', { name: '测试出口', exact: true }).check();
+  await modal().getByRole('group', { name: '显式成员' }).getByRole('checkbox', { name: '🌏 订阅节点', exact: true }).check();
   await button('上移 测试出口', modal()).click();
   await modal().getByRole('group', { name: '订阅源' }).getByRole('checkbox', { name: '测试来源', exact: true }).check();
   await save();
@@ -199,6 +231,8 @@ rules:
     const groupYAML = firstYAML.split('proxy-groups:')[1].split(/\n[^\s]/)[0];
     verify(groupYAML.includes('测试出口') && groupYAML.indexOf('测试出口') < groupYAML.indexOf('DIRECT'), '显式组成员未按表单顺序导出');
     verify(firstYAML.includes('dialer-proxy: 重命名中继') && firstYAML.includes('RULE-SET,测试规则集,节点选择'), '已发布配置缺少引用或规则');
+    verify(firstYAML.includes('192.0.2.30') && firstYAML.includes('use:') &&
+      firstYAML.includes('https://provider.example.invalid/proxies.yaml'), '发布订阅应同时包含导入的节点和引用的订阅源');
 
     await close();
     await button('已发布', page.locator('.preview')).click();
@@ -273,5 +307,5 @@ rules:
   await button('登录').click();
   await shown(page.getByRole('heading', { name: profile }));
   verify(browserErrors.length === 0, browserErrors.join('\n'));
-  return '桌面和 375px 手机端流程通过，覆盖导入与对比预览中的 emoji，以及真实订阅、账户和持久化';
+  return '桌面和 375px 手机端流程通过，覆盖订阅源引用、节点导入、emoji 预览、发布与持久化';
 }
